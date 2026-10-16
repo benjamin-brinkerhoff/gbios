@@ -23,6 +23,19 @@ targets:
       - path: Shared
     info:
       path: GBoardApp/Info.plist
+      properties:
+        CFBundleDisplayName: gbios
+        CFBundleName: GBoardApp
+        CFBundleExecutable: GBoardApp
+        CFBundleIdentifier: com.gbios.app
+        CFBundlePackageType: APPL
+        CFBundleShortVersionString: "1.1.0"
+        CFBundleVersion: "2"
+        LSRequiresIPhoneOS: true
+        ITSAppUsesNonExemptEncryption: false
+        NSMicrophoneUsageDescription: "gbios uses the microphone for Gemini Rambler natural voice dictation."
+        NSSpeechRecognitionUsageDescription: "gbios uses speech recognition to convert spoken words into text in real time."
+        NSCameraUsageDescription: "gbios uses the camera for Live OCR Text Scanning."
     entitlements:
       path: GBoardApp/GBoardApp.entitlements
     settings:
@@ -47,6 +60,22 @@ targets:
       - path: Shared
     info:
       path: GBoardKeyboardExtension/Info.plist
+      properties:
+        CFBundleDisplayName: gbios
+        CFBundleName: GBoardKeyboardExtension
+        CFBundleExecutable: GBoardKeyboardExtension
+        CFBundleIdentifier: com.gbios.app.keyboard
+        CFBundlePackageType: "XPC!"
+        CFBundleShortVersionString: "1.1.0"
+        CFBundleVersion: "2"
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.keyboard-service
+          NSExtensionPrincipalClass: GBoardKeyboardExtension.KeyboardViewController
+          NSExtensionAttributes:
+            IsASCIICapable: true
+            PrefersRightToLeft: false
+            PrimaryLanguage: en-US
+            RequestsOpenAccess: true
     entitlements:
       path: GBoardKeyboardExtension/GBoardKeyboardExtension.entitlements
     settings:

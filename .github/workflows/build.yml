@@ -56,25 +56,61 @@ jobs:
             echo "Error: GBoardApp.app not found in build products!"
             exit 1
           fi
+          echo "Found built application: $APP_PATH"
           cp -r "$APP_PATH" build/Payload/
 
+          # Ensure KeyboardExtension is embedded in PlugIns
           EXT_PATH=$(find derivedData/Build/Products/Release-iphoneos -name "GBoardKeyboardExtension.appex" -type d | head -n 1)
           if [ -n "$EXT_PATH" ]; then
             mkdir -p build/Payload/GBoardApp.app/PlugIns
-            if [ ! -d "build/Payload/GBoardApp.app/PlugIns/GBoardKeyboardExtension.appex" ]; then
-              cp -r "$EXT_PATH" build/Payload/GBoardApp.app/PlugIns/
-            fi
+            rm -rf build/Payload/GBoardApp.app/PlugIns/GBoardKeyboardExtension.appex
+            cp -r "$EXT_PATH" build/Payload/GBoardApp.app/PlugIns/
           fi
 
           chmod -R u+w build/Payload/GBoardApp.app
-          cp -f GBoardApp/Info.plist build/Payload/GBoardApp.app/Info.plist
-          cp -f GBoardKeyboardExtension/Info.plist build/Payload/GBoardApp.app/PlugIns/GBoardKeyboardExtension.appex/Info.plist
 
+          # Ensure executables have execute permissions
+          chmod +x build/Payload/GBoardApp.app/GBoardApp
+          if [ -f build/Payload/GBoardApp.app/PlugIns/GBoardKeyboardExtension.appex/GBoardKeyboardExtension ]; then
+            chmod +x build/Payload/GBoardApp.app/PlugIns/GBoardKeyboardExtension.appex/GBoardKeyboardExtension
+          fi
+
+          # Fix CFBundleExecutable, CFBundleIdentifier, CFBundleName for Feather & ESign signing
+          echo "Applying concrete metadata to GBoardApp Info.plist..."
+          plutil -replace CFBundleExecutable -string "GBoardApp" build/Payload/GBoardApp.app/Info.plist
+          plutil -replace CFBundleIdentifier -string "com.gbios.app" build/Payload/GBoardApp.app/Info.plist
+          plutil -replace CFBundleName -string "GBoardApp" build/Payload/GBoardApp.app/Info.plist
+          plutil -replace CFBundleDisplayName -string "gbios" build/Payload/GBoardApp.app/Info.plist
+          plutil -replace CFBundleShortVersionString -string "1.1.0" build/Payload/GBoardApp.app/Info.plist
+          plutil -replace CFBundleVersion -string "2" build/Payload/GBoardApp.app/Info.plist
+
+          echo "Applying concrete metadata to GBoardKeyboardExtension Info.plist..."
+          plutil -replace CFBundleExecutable -string "GBoardKeyboardExtension" build/Payload/GBoardApp.app/PlugIns/GBoardKeyboardExtension.appex/Info.plist
+          plutil -replace CFBundleIdentifier -string "com.gbios.app.keyboard" build/Payload/GBoardApp.app/PlugIns/GBoardKeyboardExtension.appex/Info.plist
+          plutil -replace CFBundleName -string "GBoardKeyboardExtension" build/Payload/GBoardApp.app/PlugIns/GBoardKeyboardExtension.appex/Info.plist
+          plutil -replace CFBundleDisplayName -string "gbios" build/Payload/GBoardApp.app/PlugIns/GBoardKeyboardExtension.appex/Info.plist
+          plutil -replace CFBundleShortVersionString -string "1.1.0" build/Payload/GBoardApp.app/PlugIns/GBoardKeyboardExtension.appex/Info.plist
+          plutil -replace CFBundleVersion -string "2" build/Payload/GBoardApp.app/PlugIns/GBoardKeyboardExtension.appex/Info.plist
+
+          # Convert to standard binary plist format
           plutil -convert binary1 build/Payload/GBoardApp.app/Info.plist
           plutil -convert binary1 build/Payload/GBoardApp.app/PlugIns/GBoardKeyboardExtension.appex/Info.plist
 
+          # Verify keys
+          echo "=== Verified GBoardApp Info.plist ==="
+          plutil -p build/Payload/GBoardApp.app/Info.plist | grep -E "CFBundleExecutable|CFBundleIdentifier|CFBundleDisplayName|CFBundleShortVersionString"
+
+          echo "=== Verified GBoardKeyboardExtension Info.plist ==="
+          plutil -p build/Payload/GBoardApp.app/PlugIns/GBoardKeyboardExtension.appex/Info.plist | grep -E "CFBundleExecutable|CFBundleIdentifier|CFBundleDisplayName|CFBundleShortVersionString"
+
+          # Remove code signatures and old provisioning profiles so sideloading tools sign cleanly
           rm -rf build/Payload/GBoardApp.app/_CodeSignature
           rm -rf build/Payload/GBoardApp.app/PlugIns/GBoardKeyboardExtension.appex/_CodeSignature
+          rm -f build/Payload/GBoardApp.app/embedded.mobileprovision
+          rm -f build/Payload/GBoardApp.app/PlugIns/GBoardKeyboardExtension.appex/embedded.mobileprovision
+
+          # Ensure PkgInfo exists
+          echo -n "APPL????" > build/Payload/GBoardApp.app/PkgInfo
 
           cd build
           zip -r -y gbios-unsigned.ipa Payload
@@ -96,12 +132,10 @@ jobs:
           body: |
             Automated Unsigned IPA build of **gbios** (Gboard for iOS) from commit `${{ github.sha }}`.
 
-            ### Included Features
-            - **Gboard In-Keyboard Translate**: Live translation bar supporting 13+ languages with source/target swap, field translation, and offline fallback dictionary
-            - **Android-style Popup Characters & Secondary Symbols**: Number and punctuation hints on every key with long-press accent menus
-            - **Clipboard Manager & Web Clipboard LAN Sync**: Pinned clips, search, and browser-to-iPhone clipboard portal
-            - **Gemini Rambler Voice Dictation & AI Writing Tools**: Real-time filler-word cleanup, proofreading, and tone switching
-            - **Camera OCR Scan Text, Inline Calculator, Spacebar Trackpad & Material 3 Belka Themes**
+            ### Fixes in this build:
+            - **Feather & ESign Sideloading Compatibility**: Fixed unexpanded `$(EXECUTABLE_NAME)`, `$(PRODUCT_BUNDLE_IDENTIFIER)`, and `$(PRODUCT_NAME)` in both `GBoardApp` and `GBoardKeyboardExtension` `Info.plist` files.
+            - **Embedded App Extension Verification**: Verified `GBoardKeyboardExtension.appex` is bundled with proper permissions and binary plist structure.
+            - **Gboard In-Keyboard Translate**: Live translation bar supporting 13+ languages with language swap and offline dictionary.
           files: build/gbios-unsigned.ipa
           draft: false
           prerelease: false
