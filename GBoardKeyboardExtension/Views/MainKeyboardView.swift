@@ -226,7 +226,7 @@ struct MainKeyboardView: View {
                 Spacer(minLength: 3)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(isLiquidGlass ? Color.clear : Color(hex: theme.backgroundColorHex).ignoresSafeArea())
+            .background((isLiquidGlass ? Color.clear : Color(hex: theme.backgroundColorHex)).ignoresSafeArea())
         }
     }
 }
