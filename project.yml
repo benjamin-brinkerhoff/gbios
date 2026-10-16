@@ -29,10 +29,20 @@ targets:
         CFBundleExecutable: GBoardApp
         CFBundleIdentifier: com.gbios.app
         CFBundlePackageType: APPL
-        CFBundleShortVersionString: "1.1.0"
-        CFBundleVersion: "2"
+        CFBundleShortVersionString: "1.2.0"
+        CFBundleVersion: "3"
         LSRequiresIPhoneOS: true
         ITSAppUsesNonExemptEncryption: false
+        UILaunchScreen: {}
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+        UIDeviceFamily:
+          - 1
+          - 2
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
         NSMicrophoneUsageDescription: "gbios uses the microphone for Gemini Rambler natural voice dictation."
         NSSpeechRecognitionUsageDescription: "gbios uses speech recognition to convert spoken words into text in real time."
         NSCameraUsageDescription: "gbios uses the camera for Live OCR Text Scanning."
@@ -44,8 +54,8 @@ targets:
         PRODUCT_NAME: GBoardApp
         PRODUCT_MODULE_NAME: GBoardApp
         INFOPLIST_FILE: GBoardApp/Info.plist
-        CURRENT_PROJECT_VERSION: 2
-        MARKETING_VERSION: 1.1.0
+        CURRENT_PROJECT_VERSION: 3
+        MARKETING_VERSION: 1.2.0
         GENERATE_INFOPLIST_FILE: NO
         ENABLE_BITCODE: NO
     dependencies:
@@ -66,8 +76,11 @@ targets:
         CFBundleExecutable: GBoardKeyboardExtension
         CFBundleIdentifier: com.gbios.app.keyboard
         CFBundlePackageType: "XPC!"
-        CFBundleShortVersionString: "1.1.0"
-        CFBundleVersion: "2"
+        CFBundleShortVersionString: "1.2.0"
+        CFBundleVersion: "3"
+        UIDeviceFamily:
+          - 1
+          - 2
         NSExtension:
           NSExtensionPointIdentifier: com.apple.keyboard-service
           NSExtensionPrincipalClass: GBoardKeyboardExtension.KeyboardViewController
@@ -84,8 +97,8 @@ targets:
         PRODUCT_NAME: GBoardKeyboardExtension
         PRODUCT_MODULE_NAME: GBoardKeyboardExtension
         INFOPLIST_FILE: GBoardKeyboardExtension/Info.plist
-        CURRENT_PROJECT_VERSION: 2
-        MARKETING_VERSION: 1.1.0
+        CURRENT_PROJECT_VERSION: 3
+        MARKETING_VERSION: 1.2.0
         GENERATE_INFOPLIST_FILE: NO
         ENABLE_BITCODE: NO
         SKIP_INSTALL: NO

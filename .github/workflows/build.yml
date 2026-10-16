@@ -56,10 +56,8 @@ jobs:
             echo "Error: GBoardApp.app not found in build products!"
             exit 1
           fi
-          echo "Found built application: $APP_PATH"
           cp -r "$APP_PATH" build/Payload/
 
-          # Ensure KeyboardExtension is embedded in PlugIns
           EXT_PATH=$(find derivedData/Build/Products/Release-iphoneos -name "GBoardKeyboardExtension.appex" -type d | head -n 1)
           if [ -n "$EXT_PATH" ]; then
             mkdir -p build/Payload/GBoardApp.app/PlugIns
@@ -68,48 +66,38 @@ jobs:
           fi
 
           chmod -R u+w build/Payload/GBoardApp.app
-
-          # Ensure executables have execute permissions
           chmod +x build/Payload/GBoardApp.app/GBoardApp
           if [ -f build/Payload/GBoardApp.app/PlugIns/GBoardKeyboardExtension.appex/GBoardKeyboardExtension ]; then
             chmod +x build/Payload/GBoardApp.app/PlugIns/GBoardKeyboardExtension.appex/GBoardKeyboardExtension
           fi
 
-          # Fix CFBundleExecutable, CFBundleIdentifier, CFBundleName for Feather & ESign signing
-          echo "Applying concrete metadata to GBoardApp Info.plist..."
+          # Ensure concrete metadata and UILaunchScreen for native full-screen display on modern iPhones
           plutil -replace CFBundleExecutable -string "GBoardApp" build/Payload/GBoardApp.app/Info.plist
           plutil -replace CFBundleIdentifier -string "com.gbios.app" build/Payload/GBoardApp.app/Info.plist
           plutil -replace CFBundleName -string "GBoardApp" build/Payload/GBoardApp.app/Info.plist
           plutil -replace CFBundleDisplayName -string "gbios" build/Payload/GBoardApp.app/Info.plist
-          plutil -replace CFBundleShortVersionString -string "1.1.0" build/Payload/GBoardApp.app/Info.plist
-          plutil -replace CFBundleVersion -string "2" build/Payload/GBoardApp.app/Info.plist
+          plutil -replace CFBundleShortVersionString -string "1.2.0" build/Payload/GBoardApp.app/Info.plist
+          plutil -replace CFBundleVersion -string "3" build/Payload/GBoardApp.app/Info.plist
+          plutil -replace UILaunchScreen -xml "<dict/>" build/Payload/GBoardApp.app/Info.plist
 
-          echo "Applying concrete metadata to GBoardKeyboardExtension Info.plist..."
           plutil -replace CFBundleExecutable -string "GBoardKeyboardExtension" build/Payload/GBoardApp.app/PlugIns/GBoardKeyboardExtension.appex/Info.plist
           plutil -replace CFBundleIdentifier -string "com.gbios.app.keyboard" build/Payload/GBoardApp.app/PlugIns/GBoardKeyboardExtension.appex/Info.plist
           plutil -replace CFBundleName -string "GBoardKeyboardExtension" build/Payload/GBoardApp.app/PlugIns/GBoardKeyboardExtension.appex/Info.plist
           plutil -replace CFBundleDisplayName -string "gbios" build/Payload/GBoardApp.app/PlugIns/GBoardKeyboardExtension.appex/Info.plist
-          plutil -replace CFBundleShortVersionString -string "1.1.0" build/Payload/GBoardApp.app/PlugIns/GBoardKeyboardExtension.appex/Info.plist
-          plutil -replace CFBundleVersion -string "2" build/Payload/GBoardApp.app/PlugIns/GBoardKeyboardExtension.appex/Info.plist
+          plutil -replace CFBundleShortVersionString -string "1.2.0" build/Payload/GBoardApp.app/PlugIns/GBoardKeyboardExtension.appex/Info.plist
+          plutil -replace CFBundleVersion -string "3" build/Payload/GBoardApp.app/PlugIns/GBoardKeyboardExtension.appex/Info.plist
 
-          # Convert to standard binary plist format
           plutil -convert binary1 build/Payload/GBoardApp.app/Info.plist
           plutil -convert binary1 build/Payload/GBoardApp.app/PlugIns/GBoardKeyboardExtension.appex/Info.plist
 
-          # Verify keys
           echo "=== Verified GBoardApp Info.plist ==="
-          plutil -p build/Payload/GBoardApp.app/Info.plist | grep -E "CFBundleExecutable|CFBundleIdentifier|CFBundleDisplayName|CFBundleShortVersionString"
+          plutil -p build/Payload/GBoardApp.app/Info.plist
 
-          echo "=== Verified GBoardKeyboardExtension Info.plist ==="
-          plutil -p build/Payload/GBoardApp.app/PlugIns/GBoardKeyboardExtension.appex/Info.plist | grep -E "CFBundleExecutable|CFBundleIdentifier|CFBundleDisplayName|CFBundleShortVersionString"
-
-          # Remove code signatures and old provisioning profiles so sideloading tools sign cleanly
           rm -rf build/Payload/GBoardApp.app/_CodeSignature
           rm -rf build/Payload/GBoardApp.app/PlugIns/GBoardKeyboardExtension.appex/_CodeSignature
           rm -f build/Payload/GBoardApp.app/embedded.mobileprovision
           rm -f build/Payload/GBoardApp.app/PlugIns/GBoardKeyboardExtension.appex/embedded.mobileprovision
 
-          # Ensure PkgInfo exists
           echo -n "APPL????" > build/Payload/GBoardApp.app/PkgInfo
 
           cd build
@@ -127,15 +115,18 @@ jobs:
         if: github.event_name == 'push'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.1.${{ github.run_number }}
-          name: "gbios v1.1.${{ github.run_number }} (Unsigned IPA)"
+          tag_name: v1.2.${{ github.run_number }}
+          name: "gbios v1.2.${{ github.run_number }} (Unsigned IPA)"
           body: |
             Automated Unsigned IPA build of **gbios** (Gboard for iOS) from commit `${{ github.sha }}`.
 
-            ### Fixes in this build:
-            - **Feather & ESign Sideloading Compatibility**: Fixed unexpanded `$(EXECUTABLE_NAME)`, `$(PRODUCT_BUNDLE_IDENTIFIER)`, and `$(PRODUCT_NAME)` in both `GBoardApp` and `GBoardKeyboardExtension` `Info.plist` files.
-            - **Embedded App Extension Verification**: Verified `GBoardKeyboardExtension.appex` is bundled with proper permissions and binary plist structure.
-            - **Gboard In-Keyboard Translate**: Live translation bar supporting 13+ languages with language swap and offline dictionary.
+            ### What's Fixed & Improved in v1.2:
+            - **Full-Screen Host App**: Restored `UILaunchScreen` metadata so the app fills the entire modern iPhone display without top/bottom black letterboxing bars.
+            - **Interactive Long-Press Key Popups**: Holding a key now opens a clickable & slide-selectable popup bar (plus a quick-select bar in the suggestion strip) so you can tap or slide to any secondary number, symbol, or accent.
+            - **Working `?123` & `=\<` Number/Symbol Pages**: Added complete Android Gboard Numbers/Punctuation and Secondary Symbols layouts with instant mode switching.
+            - **Hold-to-Delete Backspace**: Holding the backspace key now continuously deletes characters and accelerates on longer holds.
+            - **Live Theme & Settings Sync + In-Keyboard Palette**: Added multi-channel settings synchronization (works even when sideloaded via Feather/ESign without App Groups) plus a dedicated **Theme & Quick Settings** palette icon directly in the keyboard toolbar.
+            - **Centered Toolbar & 3-Column Suggestion Strip + Reduced Bezels**: Evenly centered all toolbar icons and suggestion columns, and matched the `UIInputViewController` background to the active theme edge-to-edge.
           files: build/gbios-unsigned.ipa
           draft: false
           prerelease: false

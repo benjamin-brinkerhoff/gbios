@@ -1,18 +1,18 @@
 import SwiftUI
 
 struct MainSettingsView: View {
-    @StateObject private var settings = KeyboardSettings.shared
+    @ObservedObject private var settings = KeyboardSettings.shared
     @State private var testText: String = ""
 
     var body: some View {
-        NavigationView {
+        NavigationStack {
             Form {
                 Section(header: Text("Interactive Playground")) {
                     TextField("Tap here to test gbios keyboard...", text: $testText)
-                        .padding(8)
+                        .padding(10)
                         .background(Color(.systemGray6))
                         .cornerRadius(8)
-                    Text("Tip: Ensure gbios is enabled in iOS Settings > General > Keyboard.")
+                    Text("Tip: You can also change themes and toggle features directly inside the keyboard using the palette icon in the top toolbar.")
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
@@ -52,12 +52,15 @@ struct MainSettingsView: View {
                     HStack {
                         Text("Version")
                         Spacer()
-                        Text("1.1.0 (PixelBoard & GboardWu + Translate)")
+                        Text("1.2.0 (Full Screen + Interactive Popups)")
                             .foregroundColor(.secondary)
                     }
                 }
             }
             .navigationTitle("gbios")
+            .onAppear {
+                settings.reloadFromSharedStorage()
+            }
         }
     }
 }

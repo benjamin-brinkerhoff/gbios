@@ -2,14 +2,26 @@ import SwiftUI
 
 struct MainKeyboardView: View {
     @ObservedObject var viewModel: KeyboardViewModel
-    @StateObject private var settings = KeyboardSettings.shared
+    @ObservedObject private var settings = KeyboardSettings.shared
 
     var theme: KeyboardTheme { settings.currentTheme }
 
+    private var activeRows: [[KeyModel]] {
+        switch viewModel.keyboardMode {
+        case .alphabetic:
+            return KeyModel.defaultQwertyRows(showSecondary: settings.showSecondarySymbols)
+        case .numbers:
+            return KeyModel.numberAndPunctuationRows()
+        case .symbols:
+            return KeyModel.secondarySymbolRows()
+        }
+    }
+
     var body: some View {
         OneHandedContainerView {
-            VStack(spacing: 4) {
+            VStack(spacing: 3) {
                 ToolbarView(viewModel: viewModel)
+                    .zIndex(1)
 
                 switch viewModel.activeDrawer {
                 case .clipboard:
@@ -24,76 +36,128 @@ struct MainKeyboardView: View {
                     CameraOCRView(viewModel: viewModel)
                 case .emojiPalette:
                     EmojiPaletteView(viewModel: viewModel)
+                case .quickSettings:
+                    QuickSettingsDrawerView(viewModel: viewModel)
                 case .translate, .none:
                     if viewModel.activeDrawer == .translate {
                         TranslateView(viewModel: viewModel)
+                            .zIndex(2)
                     } else {
                         SuggestionStripView(viewModel: viewModel)
+                            .zIndex(2)
                     }
 
-                    if settings.showDedicatedNumberRow {
-                        HStack(spacing: 5) {
+                    // Dedicated Number Row (if enabled on alphabetic mode)
+                    if settings.showDedicatedNumberRow && viewModel.keyboardMode == .alphabetic {
+                        HStack(spacing: 4) {
                             ForEach(KeyModel.dedicatedNumberRow()) { key in
-                                KeyButtonView(key: key, viewModel: viewModel)
-                            }
-                        }
-                        .padding(.horizontal, 4)
-                    }
-
-                    let rows = KeyModel.defaultQwertyRows(showSecondary: settings.showSecondarySymbols)
-                    ForEach(0..<rows.count, id: \.self) { rowIndex in
-                        HStack(spacing: 5) {
-                            ForEach(rows[rowIndex]) { key in
                                 KeyButtonView(key: key, viewModel: viewModel)
                                     .frame(maxWidth: .infinity)
                             }
                         }
-                        .padding(.horizontal, 4)
+                        .padding(.horizontal, 2)
+                        .zIndex(40)
                     }
 
-                    HStack(spacing: 5) {
-                        KeyButtonView(key: KeyModel(primaryText: "123", type: .numberToggle), viewModel: viewModel)
-                            .frame(width: 44)
+                    // Main Key Rows (QWERTY, Numbers, or Symbols)
+                    let rows = activeRows
+                    ForEach(0..<rows.count, id: \.self) { rowIndex in
+                        HStack(spacing: 4) {
+                            ForEach(rows[rowIndex]) { key in
+                                KeyButtonView(key: key, viewModel: viewModel)
+                                    .frame(maxWidth: key.widthMultiplier > 1.0 ? 48 : .infinity)
+                            }
+                        }
+                        .padding(.horizontal, rowIndex == 1 && viewModel.keyboardMode == .alphabetic ? 14 : 2)
+                        .zIndex(Double(30 - rowIndex * 5))
+                    }
 
-                        KeyButtonView(key: KeyModel(primaryText: "emoji", type: .emojiToggle), viewModel: viewModel)
-                            .frame(width: 40)
-
-                        if viewModel.needsInputModeSwitchKey {
-                            KeyButtonView(key: KeyModel(primaryText: "globe", type: .globe), viewModel: viewModel)
-                                .frame(width: 40)
+                    // Bottom Control Row (Android Gboard Layout: ?123/ABC, Comma, Emoji, Spacebar, Period, Return)
+                    HStack(spacing: 4) {
+                        // Mode Switch Button (?123 or ABC)
+                        Button {
+                            viewModel.triggerHaptic()
+                            viewModel.dismissPopup()
+                            if viewModel.keyboardMode == .alphabetic {
+                                viewModel.keyboardMode = .numbers
+                            } else {
+                                viewModel.keyboardMode = .alphabetic
+                            }
+                        } label: {
+                            Text(viewModel.keyboardMode == .alphabetic ? "?123" : "ABC")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundColor(Color(hex: theme.textPrimaryHex))
+                                .frame(width: 48, height: 42)
+                                .background(Color(hex: theme.functionalKeyColorHex))
+                                .cornerRadius(settings.keycapStyle.cornerRadius)
                         }
 
-                        KeyButtonView(key: KeyModel(primaryText: "space", type: .spacebar), viewModel: viewModel)
-                            .frame(maxWidth: .infinity)
-                            .gesture(
-                                DragGesture()
-                                    .onChanged { value in
-                                        if settings.enableSpacebarCursorTrackpad {
-                                            let offset = Int(value.translation.width / 12)
-                                            if abs(offset) > 0 {
-                                                viewModel.onAdjustCursor?(offset > 0 ? 1 : -1)
-                                            }
+                        // Comma Quick Key
+                        KeyButtonView(
+                            key: KeyModel(id: "bottom_comma", primaryText: ",", alternateVariants: [",", ";", ":", "'", "\""], type: .character(",")),
+                            viewModel: viewModel
+                        )
+                        .frame(width: 34)
+
+                        // Emoji Drawer Toggle
+                        Button {
+                            viewModel.triggerHaptic()
+                            viewModel.dismissPopup()
+                            viewModel.activeDrawer = (viewModel.activeDrawer == .emojiPalette) ? .none : .emojiPalette
+                        } label: {
+                            Image(systemName: "face.smiling")
+                                .font(.system(size: 17))
+                                .foregroundColor(Color(hex: theme.textPrimaryHex))
+                                .frame(width: 36, height: 42)
+                                .background(Color(hex: theme.functionalKeyColorHex))
+                                .cornerRadius(settings.keycapStyle.cornerRadius)
+                        }
+
+                        // Spacebar with G Logo and Horizontal Cursor Trackpad
+                        KeyButtonView(
+                            key: KeyModel(id: "bottom_spacebar", primaryText: "space", type: .spacebar),
+                            viewModel: viewModel
+                        )
+                        .frame(maxWidth: .infinity)
+                        .simultaneousGesture(
+                            DragGesture(minimumDistance: 10)
+                                .onChanged { value in
+                                    if settings.enableSpacebarCursorTrackpad {
+                                        let offset = Int(value.translation.width / 14)
+                                        if abs(offset) > 0 {
+                                            viewModel.onAdjustCursor?(offset > 0 ? 1 : -1)
                                         }
                                     }
-                            )
+                                }
+                        )
 
-                        KeyButtonView(key: KeyModel(primaryText: "return", type: .returnKey), viewModel: viewModel)
-                            .frame(width: 76)
+                        // Period Quick Key with Punctuation Popup
+                        KeyButtonView(
+                            key: KeyModel(id: "bottom_period", primaryText: ".", alternateVariants: [".", "?", "!", ",", "@", "/", ":", "-"], type: .character(".")),
+                            viewModel: viewModel
+                        )
+                        .frame(width: 34)
+
+                        // Return Key
+                        Button {
+                            viewModel.handleKeyPress(KeyModel(id: "bottom_return", primaryText: "return", type: .returnKey))
+                        } label: {
+                            Image(systemName: "return")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundColor(.white)
+                                .frame(width: 54, height: 42)
+                                .background(Color(hex: theme.accentColorHex))
+                                .cornerRadius(settings.keycapStyle.cornerRadius)
+                        }
                     }
-                    .padding(.horizontal, 4)
+                    .padding(.horizontal, 2)
+                    .zIndex(5)
                 }
             }
-            .padding(.bottom, 6)
-            .background(
-                Group {
-                    if theme.useFrostedGlass {
-                        Color(hex: theme.backgroundColorHex)
-                            .background(.ultraThinMaterial)
-                    } else {
-                        Color(hex: theme.backgroundColorHex)
-                    }
-                }
-            )
+            .padding(.top, 2)
+            .padding(.bottom, 2)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(Color(hex: theme.backgroundColorHex).ignoresSafeArea())
         }
     }
 }
@@ -101,7 +165,7 @@ struct MainKeyboardView: View {
 struct VoiceDictationPanelView: View {
     @ObservedObject var viewModel: KeyboardViewModel
     @StateObject private var voiceVM = VoiceTypingViewModel()
-    @StateObject private var settings = KeyboardSettings.shared
+    @ObservedObject private var settings = KeyboardSettings.shared
 
     var theme: KeyboardTheme { settings.currentTheme }
 

@@ -11,9 +11,10 @@ public enum ActiveDrawer {
     case textEditingPad
     case cameraOCR
     case emojiPalette
+    case quickSettings
 }
 
-public enum KeyboardMode {
+public enum KeyboardMode: Equatable {
     case alphabetic
     case numbers
     case symbols
@@ -27,8 +28,15 @@ public final class KeyboardViewModel: ObservableObject {
     @Published public var needsInputModeSwitchKey: Bool = false
     @Published public var contextBefore: String = ""
     @Published public var contextAfter: String = ""
-    @Published public var activePopupKey: KeyModel?
+
+    // Interactive Long-Press Popup State
+    @Published public var activePopupKeyId: String? = nil
     @Published public var activePopupVariants: [String] = []
+    @Published public var selectedVariantIndex: Int = 0
+
+    // Predictions & Inline Calculator
+    @Published public var suggestions: [String] = ["the", "I", "to"]
+    @Published public var currentWordPrefix: String = ""
     @Published public var calculatedMathResult: String?
     @Published public var isIncognito: Bool = false
 
@@ -47,9 +55,29 @@ public final class KeyboardViewModel: ObservableObject {
 
     private var lastShiftTap: Date = .distantPast
     private let hapticGenerator = UIImpactFeedbackGenerator(style: .light)
+    private let mediumHapticGenerator = UIImpactFeedbackGenerator(style: .medium)
+
+    // Continuous Backspace Timer
+    private var backspaceDelayTimer: Timer?
+    private var backspaceRepeatTimer: Timer?
+    private var backspaceTickCount: Int = 0
+
+    private let commonVocabulary: [String] = [
+        "the", "to", "and", "of", "in", "is", "it", "for", "that", "you",
+        "on", "with", "this", "have", "are", "be", "at", "or", "from", "had",
+        "by", "not", "what", "all", "were", "we", "when", "your", "can", "said",
+        "there", "use", "an", "each", "which", "she", "do", "how", "their", "if",
+        "will", "up", "other", "about", "out", "many", "then", "them", "these", "so",
+        "some", "her", "would", "make", "like", "him", "into", "time", "has", "look",
+        "two", "more", "write", "go", "see", "number", "no", "way", "could", "people",
+        "hello", "help", "here", "home", "happy", "thanks", "thank", "today", "tomorrow",
+        "great", "good", "going", "getting", "gboard", "keyboard", "iphone", "awesome",
+        "because", "before", "better", "between", "please", "pretty", "problem", "project"
+    ]
 
     public init() {
         hapticGenerator.prepare()
+        mediumHapticGenerator.prepare()
     }
 
     public func updateContext(before: String?, after: String?) {
@@ -61,28 +89,145 @@ public final class KeyboardViewModel: ObservableObject {
         } else {
             self.calculatedMathResult = nil
         }
+
+        updateSuggestions(from: self.contextBefore)
     }
 
+    private func updateSuggestions(from before: String) {
+        let components = before.components(separatedBy: CharacterSet.alphanumerics.inverted)
+        let lastToken = components.last ?? ""
+        self.currentWordPrefix = lastToken
+
+        guard !lastToken.isEmpty else {
+            self.suggestions = ["I", "the", "to"]
+            return
+        }
+
+        let lower = lastToken.lowercased()
+        var matches = commonVocabulary.filter { $0.hasPrefix(lower) && $0 != lower }
+        if isShifted || (lastToken.first?.isUppercase == true) {
+            matches = matches.map { $0.prefix(1).uppercased() + $0.dropFirst() }
+        }
+
+        var result: [String] = [lastToken]
+        for m in matches.prefix(2) {
+            result.append(m)
+        }
+        while result.count < 3 {
+            let defaults = ["the", "and", "to"]
+            for d in defaults where !result.contains(d) && result.count < 3 {
+                result.append(d)
+            }
+            break
+        }
+        self.suggestions = Array(result.prefix(3))
+    }
+
+    public func applySuggestion(_ word: String) {
+        triggerHaptic()
+        dismissPopup()
+        if activeDrawer == .translate {
+            translateInputBuffer.append(word + " ")
+            retranslateActiveBuffer()
+            return
+        }
+        if !currentWordPrefix.isEmpty {
+            onReplaceRange?(currentWordPrefix.count, word + " ")
+        } else {
+            insertText(word + " ")
+        }
+    }
+
+    // MARK: - Continuous Backspace Hold-to-Delete
+    public func startContinuousBackspace() {
+        stopContinuousBackspace()
+        dismissPopup()
+        triggerHaptic()
+        performSingleBackspace()
+        backspaceTickCount = 0
+
+        backspaceDelayTimer = Timer.scheduledTimer(withTimeInterval: 0.35, repeats: false) { [weak self] _ in
+            guard let self = self else { return }
+            self.backspaceRepeatTimer = Timer.scheduledTimer(withTimeInterval: 0.065, repeats: true) { [weak self] _ in
+                guard let self = self else { return }
+                self.backspaceTickCount += 1
+                self.performSingleBackspace()
+                if self.backspaceTickCount > 15 {
+                    self.performSingleBackspace()
+                }
+            }
+        }
+    }
+
+    public func stopContinuousBackspace() {
+        backspaceDelayTimer?.invalidate()
+        backspaceDelayTimer = nil
+        backspaceRepeatTimer?.invalidate()
+        backspaceRepeatTimer = nil
+        backspaceTickCount = 0
+    }
+
+    private func performSingleBackspace() {
+        if activeDrawer == .translate && !translateInputBuffer.isEmpty {
+            translateInputBuffer.removeLast()
+            retranslateActiveBuffer()
+        } else {
+            onDeleteBackward?()
+        }
+    }
+
+    // MARK: - Interactive Key Popup Management
+    public func showLongPressPopup(for key: KeyModel) {
+        guard KeyboardSettings.shared.enableKeyPopups else { return }
+        var variants = key.alternateVariants
+        if variants.isEmpty {
+            if let sec = key.secondaryText {
+                variants = [sec, key.primaryText]
+            } else {
+                variants = [key.primaryText]
+            }
+        }
+        if isShifted || isCapsLock {
+            variants = variants.map { $0.uppercased() }
+        }
+        mediumHapticGenerator.impactOccurred()
+        activePopupKeyId = key.id
+        activePopupVariants = variants
+        selectedVariantIndex = 0
+    }
+
+    public func selectPopupVariant(_ variant: String) {
+        triggerHaptic()
+        routeTypedCharacter(variant)
+        if isShifted && !isCapsLock {
+            isShifted = false
+        }
+        dismissPopup()
+    }
+
+    public func dismissPopup() {
+        activePopupKeyId = nil
+        activePopupVariants = []
+        selectedVariantIndex = 0
+    }
+
+    // MARK: - Key Press Handling
     public func handleKeyPress(_ key: KeyModel) {
+        dismissPopup()
         triggerHaptic()
         switch key.type {
         case .character(let char):
-            let output = isShifted ? char.uppercased() : char
+            let output = (keyboardMode == .alphabetic && (isShifted || isCapsLock)) ? char.uppercased() : char
             routeTypedCharacter(output)
             if isShifted && !isCapsLock { isShifted = false }
         case .secondaryCharacter(let primary, _):
-            let output = isShifted ? primary.uppercased() : primary
+            let output = (isShifted || isCapsLock) ? primary.uppercased() : primary
             routeTypedCharacter(output)
             if isShifted && !isCapsLock { isShifted = false }
         case .shift:
             handleShiftPress()
         case .backspace:
-            if activeDrawer == .translate && !translateInputBuffer.isEmpty {
-                translateInputBuffer.removeLast()
-                retranslateActiveBuffer()
-            } else {
-                onDeleteBackward?()
-            }
+            performSingleBackspace()
         case .spacebar:
             routeTypedCharacter(" ")
         case .returnKey:
@@ -91,10 +236,12 @@ public final class KeyboardViewModel: ObservableObject {
             } else {
                 insertText("\n")
             }
-        case .symbolToggle:
-            keyboardMode = (keyboardMode == .symbols) ? .alphabetic : .symbols
         case .numberToggle:
-            keyboardMode = (keyboardMode == .numbers) ? .alphabetic : .numbers
+            keyboardMode = (keyboardMode == .numbers || keyboardMode == .symbols) ? .alphabetic : .numbers
+        case .symbolToggle:
+            keyboardMode = (keyboardMode == .symbols) ? .numbers : .symbols
+        case .alphabeticToggle:
+            keyboardMode = .alphabetic
         case .globe:
             onNextKeyboard?()
         case .emojiToggle:
