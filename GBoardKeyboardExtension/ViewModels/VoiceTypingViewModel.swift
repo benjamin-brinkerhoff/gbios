@@ -1,4 +1,5 @@
 import Foundation
+import Combine
 import Speech
 import AVFoundation
 
@@ -78,17 +79,15 @@ public final class VoiceTypingViewModel: ObservableObject {
         statusMessage = "Tap mic to speak (Rambler Voice)"
     }
 
-    // PixelBoard Gemini Rambler real-time speech cleanup filter
     public func applyRamblerCleanup(_ text: String) -> String {
         let fillerWords = [
-            "\bum\b", "\buh\b", "\blike\b", "\byou know\b", "\bah\b",
-            "\bso uh\b", "\bkinda\b"
+            "\\bum\\b", "\\buh\\b", "\\blike\\b", "\\byou know\\b", "\\bah\\b",
+            "\\bso uh\\b", "\\bkinda\\b"
         ]
         var cleaned = text
         for pattern in fillerWords {
             cleaned = cleaned.replacingOccurrences(of: pattern, with: "", options: [.regularExpression, .caseInsensitive])
         }
-        // Normalize whitespace
         cleaned = cleaned.replacingOccurrences(of: "\\s{2,}", with: " ", options: .regularExpression)
         return cleaned.trimmingCharacters(in: .whitespaces)
     }

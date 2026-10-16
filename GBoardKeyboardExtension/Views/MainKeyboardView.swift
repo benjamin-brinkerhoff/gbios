@@ -9,10 +9,8 @@ struct MainKeyboardView: View {
     var body: some View {
         OneHandedContainerView {
             VStack(spacing: 4) {
-                // Gboard Top Toolbar
                 ToolbarView(viewModel: viewModel)
 
-                // Active Drawer Panels
                 switch viewModel.activeDrawer {
                 case .clipboard:
                     ClipboardView(viewModel: viewModel)
@@ -26,11 +24,13 @@ struct MainKeyboardView: View {
                     CameraOCRView(viewModel: viewModel)
                 case .emojiPalette:
                     EmojiPaletteView(viewModel: viewModel)
-                case .none:
-                    // Suggestion Strip
-                    SuggestionStripView(viewModel: viewModel)
+                case .translate, .none:
+                    if viewModel.activeDrawer == .translate {
+                        TranslateView(viewModel: viewModel)
+                    } else {
+                        SuggestionStripView(viewModel: viewModel)
+                    }
 
-                    // Dedicated Number Row (if enabled)
                     if settings.showDedicatedNumberRow {
                         HStack(spacing: 5) {
                             ForEach(KeyModel.dedicatedNumberRow()) { key in
@@ -40,7 +40,6 @@ struct MainKeyboardView: View {
                         .padding(.horizontal, 4)
                     }
 
-                    // QWERTY Rows
                     let rows = KeyModel.defaultQwertyRows(showSecondary: settings.showSecondarySymbols)
                     ForEach(0..<rows.count, id: \.self) { rowIndex in
                         HStack(spacing: 5) {
@@ -52,7 +51,6 @@ struct MainKeyboardView: View {
                         .padding(.horizontal, 4)
                     }
 
-                    // Bottom Control Row
                     HStack(spacing: 5) {
                         KeyButtonView(key: KeyModel(primaryText: "123", type: .numberToggle), viewModel: viewModel)
                             .frame(width: 44)
@@ -65,7 +63,6 @@ struct MainKeyboardView: View {
                                 .frame(width: 40)
                         }
 
-                        // Spacebar with G-Logo and Cursor Dragging
                         KeyButtonView(key: KeyModel(primaryText: "space", type: .spacebar), viewModel: viewModel)
                             .frame(maxWidth: .infinity)
                             .gesture(

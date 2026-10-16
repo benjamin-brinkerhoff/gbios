@@ -52,6 +52,18 @@ public final class KeyboardSettings: ObservableObject {
     @Published public var enableAIWritingTools: Bool {
         didSet { defaults.set(enableAIWritingTools, forKey: "enableAIWritingTools") }
     }
+    @Published public var enableTranslateFeature: Bool {
+        didSet { defaults.set(enableTranslateFeature, forKey: "enableTranslateFeature") }
+    }
+    @Published public var translateSourceLang: String {
+        didSet { defaults.set(translateSourceLang, forKey: "translateSourceLang") }
+    }
+    @Published public var translateTargetLang: String {
+        didSet { defaults.set(translateTargetLang, forKey: "translateTargetLang") }
+    }
+    @Published public var translateLiveAsYouType: Bool {
+        didSet { defaults.set(translateLiveAsYouType, forKey: "translateLiveAsYouType") }
+    }
     @Published public var enableWebClipboard: Bool {
         didSet { defaults.set(enableWebClipboard, forKey: "enableWebClipboard") }
     }
@@ -93,6 +105,10 @@ public final class KeyboardSettings: ObservableObject {
         self.ramblerRemoveFillerWords = store.object(forKey: "ramblerRemoveFillerWords") as? Bool ?? true
         self.ramblerAutoPunctuation = store.object(forKey: "ramblerAutoPunctuation") as? Bool ?? true
         self.enableAIWritingTools = store.object(forKey: "enableAIWritingTools") as? Bool ?? true
+        self.enableTranslateFeature = store.object(forKey: "enableTranslateFeature") as? Bool ?? true
+        self.translateSourceLang = store.string(forKey: "translateSourceLang") ?? "auto"
+        self.translateTargetLang = store.string(forKey: "translateTargetLang") ?? "es"
+        self.translateLiveAsYouType = store.object(forKey: "translateLiveAsYouType") as? Bool ?? true
         self.enableWebClipboard = store.object(forKey: "enableWebClipboard") as? Bool ?? false
         self.webClipboardPort = store.object(forKey: "webClipboardPort") as? Int ?? 8088
         self.webClipboardPairingCode = store.string(forKey: "webClipboardPairingCode") ?? "4829"
@@ -108,5 +124,42 @@ public final class KeyboardSettings: ObservableObject {
 
     public var keycapStyle: KeycapStyle {
         KeycapStyle(rawValue: keycapStyleRaw) ?? .belkaRounded
+    }
+
+    public func swapTranslationLanguages() {
+        guard translateSourceLang != "auto" else {
+            translateSourceLang = translateTargetLang
+            translateTargetLang = "en"
+            return
+        }
+        let temp = translateSourceLang
+        translateSourceLang = translateTargetLang
+        translateTargetLang = temp
+    }
+
+    public func exportConfigurationJSON() -> String? {
+        let dict: [String: Any] = [
+            "showSecondarySymbols": showSecondarySymbols,
+            "showDedicatedNumberRow": showDedicatedNumberRow,
+            "enableKeyPopups": enableKeyPopups,
+            "enableLongPressAccents": enableLongPressAccents,
+            "enableSpacebarCursorTrackpad": enableSpacebarCursorTrackpad,
+            "enableInlineCalculator": enableInlineCalculator,
+            "enableHapticFeedback": enableHapticFeedback,
+            "showGLogoOnSpacebar": showGLogoOnSpacebar,
+            "keycapStyleRaw": keycapStyleRaw,
+            "selectedThemeId": selectedThemeId,
+            "enableRamblerVoice": enableRamblerVoice,
+            "ramblerRemoveFillerWords": ramblerRemoveFillerWords,
+            "enableTranslateFeature": enableTranslateFeature,
+            "translateSourceLang": translateSourceLang,
+            "translateTargetLang": translateTargetLang,
+            "translateLiveAsYouType": translateLiveAsYouType,
+            "webClipboardPort": webClipboardPort,
+            "webClipboardPairingCode": webClipboardPairingCode,
+            "exportedAt": ISO8601DateFormatter().string(from: Date())
+        ]
+        guard let data = try? JSONSerialization.data(withJSONObject: dict, options: .prettyPrinted) else { return nil }
+        return String(data: data, encoding: .utf8)
     }
 }

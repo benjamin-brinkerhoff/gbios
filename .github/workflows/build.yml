@@ -1,22 +1,33 @@
-name: CI Build
+name: Build & Release Unsigned IPA
 
 on:
   push:
     branches: [ main ]
   pull_request:
     branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
-  build:
-    name: Build gbios App & Keyboard Extension
+  build-unsigned-ipa:
+    name: Build Unsigned IPA & Release
     runs-on: macos-14
 
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Set Xcode Version
-        run: sudo xcode-select -s /Applications/Xcode_15.4.app
+      - name: Select Latest Xcode
+        run: |
+          XCODE_PATH=$(ls -d /Applications/Xcode_16*.app 2>/dev/null | sort -V | tail -n 1)
+          if [ -z "$XCODE_PATH" ]; then
+            XCODE_PATH=$(ls -d /Applications/Xcode*.app | sort -V | tail -n 1)
+          fi
+          echo "Using Xcode: $XCODE_PATH"
+          sudo xcode-select --switch "$XCODE_PATH"
+          xcodebuild -version
 
       - name: Install XcodeGen
         run: brew install xcodegen
@@ -24,20 +35,74 @@ jobs:
       - name: Generate Xcode Project
         run: xcodegen generate
 
-      - name: Build Host App
+      - name: Build Application and Keyboard Extension (Unsigned)
         run: |
-          xcodebuild build \
+          xcodebuild \
             -project gbios.xcodeproj \
             -scheme GBoardApp \
-            -destination "generic/platform=iOS Simulator" \
+            -configuration Release \
+            -sdk iphoneos \
+            -derivedDataPath derivedData \
             CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGNING_REQUIRED=NO
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            build
 
-      - name: Build Keyboard Extension
+      - name: Package Payload into Unsigned IPA
         run: |
-          xcodebuild build \
-            -project gbios.xcodeproj \
-            -scheme GBoardKeyboardExtension \
-            -destination "generic/platform=iOS Simulator" \
-            CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGNING_REQUIRED=NO
+          mkdir -p build/Payload
+          APP_PATH=$(find derivedData/Build/Products/Release-iphoneos -name "GBoardApp.app" -type d | head -n 1)
+          if [ -z "$APP_PATH" ]; then
+            echo "Error: GBoardApp.app not found in build products!"
+            exit 1
+          fi
+          cp -r "$APP_PATH" build/Payload/
+
+          EXT_PATH=$(find derivedData/Build/Products/Release-iphoneos -name "GBoardKeyboardExtension.appex" -type d | head -n 1)
+          if [ -n "$EXT_PATH" ]; then
+            mkdir -p build/Payload/GBoardApp.app/PlugIns
+            if [ ! -d "build/Payload/GBoardApp.app/PlugIns/GBoardKeyboardExtension.appex" ]; then
+              cp -r "$EXT_PATH" build/Payload/GBoardApp.app/PlugIns/
+            fi
+          fi
+
+          chmod -R u+w build/Payload/GBoardApp.app
+          cp -f GBoardApp/Info.plist build/Payload/GBoardApp.app/Info.plist
+          cp -f GBoardKeyboardExtension/Info.plist build/Payload/GBoardApp.app/PlugIns/GBoardKeyboardExtension.appex/Info.plist
+
+          plutil -convert binary1 build/Payload/GBoardApp.app/Info.plist
+          plutil -convert binary1 build/Payload/GBoardApp.app/PlugIns/GBoardKeyboardExtension.appex/Info.plist
+
+          rm -rf build/Payload/GBoardApp.app/_CodeSignature
+          rm -rf build/Payload/GBoardApp.app/PlugIns/GBoardKeyboardExtension.appex/_CodeSignature
+
+          cd build
+          zip -r -y gbios-unsigned.ipa Payload
+          ls -lh gbios-unsigned.ipa
+
+      - name: Upload Unsigned IPA Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: gbios-unsigned-ipa
+          path: build/gbios-unsigned.ipa
+          retention-days: 30
+
+      - name: Create GitHub Release with Unsigned IPA
+        if: github.event_name == 'push'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.1.${{ github.run_number }}
+          name: "gbios v1.1.${{ github.run_number }} (Unsigned IPA)"
+          body: |
+            Automated Unsigned IPA build of **gbios** (Gboard for iOS) from commit `${{ github.sha }}`.
+
+            ### Included Features
+            - **Gboard In-Keyboard Translate**: Live translation bar supporting 13+ languages with source/target swap, field translation, and offline fallback dictionary
+            - **Android-style Popup Characters & Secondary Symbols**: Number and punctuation hints on every key with long-press accent menus
+            - **Clipboard Manager & Web Clipboard LAN Sync**: Pinned clips, search, and browser-to-iPhone clipboard portal
+            - **Gemini Rambler Voice Dictation & AI Writing Tools**: Real-time filler-word cleanup, proofreading, and tone switching
+            - **Camera OCR Scan Text, Inline Calculator, Spacebar Trackpad & Material 3 Belka Themes**
+          files: build/gbios-unsigned.ipa
+          draft: false
+          prerelease: false
+          make_latest: true

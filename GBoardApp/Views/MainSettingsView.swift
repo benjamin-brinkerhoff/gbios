@@ -21,6 +21,9 @@ struct MainSettingsView: View {
                     NavigationLink(destination: SetupInstructionsView()) {
                         Label("Setup & Enable Keyboard", systemImage: "keyboard")
                     }
+                    NavigationLink(destination: TranslateSettingsView()) {
+                        Label("Gboard Translate (13+ Languages)", systemImage: "character.bubble.fill")
+                    }
                     NavigationLink(destination: ThemeGalleryView()) {
                         Label("Theme & Keycaps (Belka M3)", systemImage: "paintpalette")
                     }
@@ -36,6 +39,7 @@ struct MainSettingsView: View {
                 }
 
                 Section(header: Text("Quick Android Gboard Toggles")) {
+                    Toggle("Gboard In-Keyboard Translate Bar", isOn: $settings.enableTranslateFeature)
                     Toggle("Secondary Symbol Hints on Keys", isOn: $settings.showSecondarySymbols)
                     Toggle("Dedicated Number Row", isOn: $settings.showDedicatedNumberRow)
                     Toggle("Keypress Popups & Accents", isOn: $settings.enableKeyPopups)
@@ -48,7 +52,7 @@ struct MainSettingsView: View {
                     HStack {
                         Text("Version")
                         Spacer()
-                        Text("1.0.0 (PixelBoard & GboardWu)")
+                        Text("1.1.0 (PixelBoard & GboardWu + Translate)")
                             .foregroundColor(.secondary)
                     }
                 }

@@ -1,8 +1,10 @@
+import UIKit
 import SwiftUI
 import Combine
 
 public enum ActiveDrawer {
     case none
+    case translate
     case clipboard
     case voiceDictation
     case aiWritingTools
@@ -30,6 +32,11 @@ public final class KeyboardViewModel: ObservableObject {
     @Published public var calculatedMathResult: String?
     @Published public var isIncognito: Bool = false
 
+    // Gboard Translate state
+    @Published public var translateInputBuffer: String = ""
+    @Published public var translatedPreviewText: String = ""
+    @Published public var isTranslating: Bool = false
+
     // Callbacks to UIInputViewController
     public var onInsertText: ((String) -> Void)?
     public var onDeleteBackward: (() -> Void)?
@@ -49,7 +56,6 @@ public final class KeyboardViewModel: ObservableObject {
         self.contextBefore = before ?? ""
         self.contextAfter = after ?? ""
 
-        // GboardWu Inline Calculator evaluation
         if KeyboardSettings.shared.enableInlineCalculator {
             self.calculatedMathResult = MathCalculator.shared.evaluateExpressionInText(contextBefore)
         } else {
@@ -61,19 +67,30 @@ public final class KeyboardViewModel: ObservableObject {
         triggerHaptic()
         switch key.type {
         case .character(let char):
-            insertText(isShifted ? char.uppercased() : char)
+            let output = isShifted ? char.uppercased() : char
+            routeTypedCharacter(output)
             if isShifted && !isCapsLock { isShifted = false }
         case .secondaryCharacter(let primary, _):
-            insertText(isShifted ? primary.uppercased() : primary)
+            let output = isShifted ? primary.uppercased() : primary
+            routeTypedCharacter(output)
             if isShifted && !isCapsLock { isShifted = false }
         case .shift:
             handleShiftPress()
         case .backspace:
-            onDeleteBackward?()
+            if activeDrawer == .translate && !translateInputBuffer.isEmpty {
+                translateInputBuffer.removeLast()
+                retranslateActiveBuffer()
+            } else {
+                onDeleteBackward?()
+            }
         case .spacebar:
-            insertText(" ")
+            routeTypedCharacter(" ")
         case .returnKey:
-            insertText("\n")
+            if activeDrawer == .translate && !translateInputBuffer.isEmpty {
+                insertTranslatedBuffer()
+            } else {
+                insertText("\n")
+            }
         case .symbolToggle:
             keyboardMode = (keyboardMode == .symbols) ? .alphabetic : .symbols
         case .numberToggle:
@@ -85,6 +102,82 @@ public final class KeyboardViewModel: ObservableObject {
         case .toolbarToggle:
             activeDrawer = .none
         }
+    }
+
+    private func routeTypedCharacter(_ text: String) {
+        if activeDrawer == .translate {
+            translateInputBuffer.append(text)
+            retranslateActiveBuffer()
+        } else {
+            insertText(text)
+        }
+    }
+
+    public func retranslateActiveBuffer() {
+        let query = translateInputBuffer.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty else {
+            translatedPreviewText = ""
+            isTranslating = false
+            return
+        }
+        isTranslating = true
+        let source = KeyboardSettings.shared.translateSourceLang
+        let target = KeyboardSettings.shared.translateTargetLang
+        TranslationService.shared.translate(text: query, from: source, to: target) { [weak self] translated in
+            guard let self = self else { return }
+            self.isTranslating = false
+            self.translatedPreviewText = translated
+        }
+    }
+
+    public func insertTranslatedBuffer() {
+        let finalOut = translatedPreviewText.isEmpty ? translateInputBuffer : translatedPreviewText
+        guard !finalOut.isEmpty else { return }
+        if !isIncognito {
+            TranslationService.shared.saveToHistory(
+                sourceText: translateInputBuffer,
+                translatedText: finalOut,
+                from: KeyboardSettings.shared.translateSourceLang,
+                to: KeyboardSettings.shared.translateTargetLang
+            )
+        }
+        insertText(finalOut + " ")
+        clearTranslateBuffer()
+    }
+
+    public func translateCurrentDocumentContext() {
+        let existing = contextBefore.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !existing.isEmpty else { return }
+        isTranslating = true
+        let source = KeyboardSettings.shared.translateSourceLang
+        let target = KeyboardSettings.shared.translateTargetLang
+        let replaceLen = contextBefore.count
+        TranslationService.shared.translate(text: existing, from: source, to: target) { [weak self] translated in
+            guard let self = self else { return }
+            self.isTranslating = false
+            if !self.isIncognito {
+                TranslationService.shared.saveToHistory(
+                    sourceText: existing,
+                    translatedText: translated,
+                    from: source,
+                    to: target
+                )
+            }
+            self.onReplaceRange?(replaceLen, translated)
+        }
+    }
+
+    public func clearTranslateBuffer() {
+        translateInputBuffer = ""
+        translatedPreviewText = ""
+        isTranslating = false
+    }
+
+    public func commitOrCloseTranslate() {
+        if !translatedPreviewText.isEmpty {
+            insertTranslatedBuffer()
+        }
+        activeDrawer = .none
     }
 
     public func insertText(_ text: String) {

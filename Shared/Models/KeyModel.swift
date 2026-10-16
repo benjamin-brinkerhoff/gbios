@@ -1,3 +1,4 @@
+import SwiftUI
 import Foundation
 
 public enum KeyType: Equatable {

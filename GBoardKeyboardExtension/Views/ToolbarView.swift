@@ -7,8 +7,7 @@ struct ToolbarView: View {
     var theme: KeyboardTheme { settings.currentTheme }
 
     var body: some View {
-        HStack(spacing: 14) {
-            // Google G / Chevron Toggle
+        HStack(spacing: 10) {
             Button {
                 withAnimation(.spring()) {
                     viewModel.activeDrawer = .none
@@ -23,6 +22,13 @@ struct ToolbarView: View {
             }
 
             Spacer()
+
+            // Gboard Translate icon
+            if settings.enableTranslateFeature {
+                ToolbarButton(icon: "character.bubble.fill", isActive: viewModel.activeDrawer == .translate, theme: theme) {
+                    toggleDrawer(.translate)
+                }
+            }
 
             // Clipboard Manager icon
             ToolbarButton(icon: "doc.on.clipboard", isActive: viewModel.activeDrawer == .clipboard, theme: theme) {
