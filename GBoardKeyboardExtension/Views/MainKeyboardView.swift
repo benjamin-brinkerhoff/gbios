@@ -5,6 +5,7 @@ struct MainKeyboardView: View {
     @ObservedObject private var settings = KeyboardSettings.shared
 
     var theme: KeyboardTheme { settings.currentTheme }
+    var isLiquidGlass: Bool { settings.useNativeIOSLayout || theme.useFrostedGlass }
 
     private var activeRows: [[KeyModel]] {
         switch viewModel.keyboardMode {
@@ -19,11 +20,13 @@ struct MainKeyboardView: View {
 
     var body: some View {
         OneHandedContainerView {
-            VStack(spacing: settings.useNativeIOSLayout ? 5 : 3) {
-                // If in Native iOS Mode, hide Gboard Toolbar and show clean 3-word predictive strip unless a drawer is active
+            VStack(spacing: 0) {
                 if !settings.useNativeIOSLayout {
                     ToolbarView(viewModel: viewModel)
                         .zIndex(1)
+                        .padding(.bottom, 2)
+                } else {
+                    Spacer().frame(height: 8)
                 }
 
                 switch viewModel.activeDrawer {
@@ -45,194 +48,185 @@ struct MainKeyboardView: View {
                     if viewModel.activeDrawer == .translate {
                         TranslateView(viewModel: viewModel)
                             .zIndex(100)
+                            .padding(.bottom, 8)
                     } else {
-                        // Native iOS 3-Column Prediction Strip (or Gboard strip)
                         SuggestionStripView(viewModel: viewModel)
                             .zIndex(100)
+                            .padding(.bottom, settings.useNativeIOSLayout ? 10 : 4)
                     }
 
-                    // Dedicated Number Row (if enabled on alphabetic mode and not in minimal iOS mode)
-                    if settings.showDedicatedNumberRow && viewModel.keyboardMode == .alphabetic && !settings.useNativeIOSLayout {
+                    // Dedicated Number Row (if enabled)
+                    if settings.showDedicatedNumberRow && viewModel.keyboardMode == .alphabetic {
                         let hasActiveKey = KeyModel.dedicatedNumberRow().contains { $0.id == viewModel.activePopupKeyId }
-                        HStack(spacing: 4) {
+                        HStack(spacing: 6) {
                             ForEach(KeyModel.dedicatedNumberRow()) { key in
                                 KeyButtonView(key: key, viewModel: viewModel)
                                     .frame(maxWidth: .infinity)
                             }
                         }
-                        .padding(.horizontal, 2)
+                        .padding(.horizontal, 6.5)
+                        .padding(.bottom, settings.useNativeIOSLayout ? 9 : 5)
                         .zIndex(hasActiveKey ? 200 : 10)
                     }
 
-                    // Main Key Rows (QWERTY, Numbers, or Symbols)
+                    // Main Key Rows (Row 1, Row 2, Row 3) with exact iOS 26 Liquid Glass spacing (11pt vertical, 6pt horizontal)
                     let rows = activeRows
-                    ForEach(0..<rows.count, id: \.self) { rowIndex in
-                        let rowKeys = rows[rowIndex]
-                        let hasActiveKey = rowKeys.contains { $0.id == viewModel.activePopupKeyId }
+                    VStack(spacing: settings.useNativeIOSLayout ? 11 : 6) {
+                        ForEach(0..<rows.count, id: \.self) { rowIndex in
+                            let rowKeys = rows[rowIndex]
+                            let hasActiveKey = rowKeys.contains { $0.id == viewModel.activePopupKeyId }
 
-                        HStack(spacing: settings.useNativeIOSLayout ? 6 : 4) {
-                            ForEach(rowKeys) { key in
-                                KeyButtonView(key: key, viewModel: viewModel)
-                                    .frame(maxWidth: key.widthMultiplier > 1.0 ? 46 : .infinity)
-                            }
-                        }
-                        .padding(.horizontal, rowIndex == 1 && viewModel.keyboardMode == .alphabetic ? (settings.useNativeIOSLayout ? 16 : 14) : 3)
-                        .zIndex(hasActiveKey ? 300 : Double(20 - rowIndex))
-                    }
+                            if rowIndex == 2 && viewModel.keyboardMode == .alphabetic && rowKeys.count >= 3 {
+                                // Row 3 exact iOS geometry: 44pt Shift + 13.7pt gap + 7 letter keys (6pt spacing) + 13.7pt gap + 44pt Backspace
+                                HStack(spacing: 0) {
+                                    KeyButtonView(key: rowKeys.first!, viewModel: viewModel)
+                                        .frame(width: 44.0)
 
-                    // Bottom Control Row
-                    if settings.useNativeIOSLayout {
-                        // Native Apple iOS Bottom Row (ec2fbc08.jpeg): [ 123 ] [ 😃 ] [ spacebar ] [ ↩ ]
-                        HStack(spacing: 6) {
-                            // 123 / ABC Mode Toggle
-                            Button {
-                                viewModel.triggerHaptic()
-                                viewModel.dismissPopup()
-                                if viewModel.keyboardMode == .alphabetic {
-                                    viewModel.keyboardMode = .numbers
-                                } else {
-                                    viewModel.keyboardMode = .alphabetic
-                                }
-                            } label: {
-                                Text(viewModel.keyboardMode == .alphabetic ? "123" : "ABC")
-                                    .font(.system(size: 16, weight: .regular))
-                                    .foregroundColor(Color(hex: theme.textPrimaryHex))
-                                    .frame(width: 44, height: 42)
-                                    .background(Color(hex: theme.functionalKeyColorHex))
-                                    .cornerRadius(5)
-                                    .shadow(color: Color.black.opacity(0.18), radius: 0.8, x: 0, y: 1)
-                            }
+                                    Spacer(minLength: 13.5)
 
-                            // Emoji Key
-                            Button {
-                                viewModel.triggerHaptic()
-                                viewModel.dismissPopup()
-                                viewModel.activeDrawer = (viewModel.activeDrawer == .emojiPalette) ? .none : .emojiPalette
-                            } label: {
-                                Image(systemName: "face.smiling")
-                                    .font(.system(size: 18, weight: .regular))
-                                    .foregroundColor(Color(hex: theme.textPrimaryHex))
-                                    .frame(width: 44, height: 42)
-                                    .background(Color(hex: theme.functionalKeyColorHex))
-                                    .cornerRadius(5)
-                                    .shadow(color: Color.black.opacity(0.18), radius: 0.8, x: 0, y: 1)
-                            }
-
-                            // Clean Apple-style Spacebar with cursor slide
-                            KeyButtonView(
-                                key: KeyModel(id: "ios_spacebar", primaryText: "space", type: .spacebar),
-                                viewModel: viewModel
-                            )
-                            .frame(maxWidth: .infinity)
-                            .simultaneousGesture(
-                                DragGesture(minimumDistance: 10)
-                                    .onChanged { value in
-                                        if settings.enableSpacebarCursorTrackpad {
-                                            let offset = Int(value.translation.width / 14)
-                                            if abs(offset) > 0 {
-                                                viewModel.onAdjustCursor?(offset > 0 ? 1 : -1)
-                                            }
+                                    HStack(spacing: 6.0) {
+                                        ForEach(Array(rowKeys.dropFirst().dropLast())) { key in
+                                            KeyButtonView(key: key, viewModel: viewModel)
+                                                .frame(maxWidth: .infinity)
                                         }
                                     }
-                            )
 
-                            // Native iOS Return Key with angled curved arrow
-                            Button {
-                                viewModel.handleKeyPress(KeyModel(id: "ios_return", primaryText: "return", type: .returnKey))
-                            } label: {
-                                Image(systemName: "return")
-                                    .font(.system(size: 17, weight: .regular))
-                                    .foregroundColor(Color(hex: theme.textPrimaryHex))
-                                    .frame(width: 76, height: 42)
-                                    .background(Color(hex: theme.functionalKeyColorHex))
-                                    .cornerRadius(5)
-                                    .shadow(color: Color.black.opacity(0.18), radius: 0.8, x: 0, y: 1)
+                                    Spacer(minLength: 13.5)
+
+                                    KeyButtonView(key: rowKeys.last!, viewModel: viewModel)
+                                        .frame(width: 44.0)
+                                }
+                                .padding(.horizontal, 6.5)
+                                .zIndex(hasActiveKey ? 300 : Double(20 - rowIndex))
+                            } else {
+                                // Row 1 (6.5pt side inset) & Row 2 (25.8pt side inset so 9 keys match Row 1's exact 32.6pt key width!)
+                                HStack(spacing: 6.0) {
+                                    ForEach(rowKeys) { key in
+                                        KeyButtonView(key: key, viewModel: viewModel)
+                                            .frame(maxWidth: key.widthMultiplier > 1.0 ? 44.0 : .infinity)
+                                    }
+                                }
+                                .padding(.horizontal, (rowIndex == 1 && viewModel.keyboardMode == .alphabetic) ? 25.8 : 6.5)
+                                .zIndex(hasActiveKey ? 300 : Double(20 - rowIndex))
                             }
                         }
-                        .padding(.horizontal, 3)
-                        .zIndex(5)
-                    } else {
-                        // Standard Gboard Android Bottom Row (?123, Comma, Emoji, G English Spacebar, Period, Return)
-                        HStack(spacing: 4) {
-                            Button {
-                                viewModel.triggerHaptic()
-                                viewModel.dismissPopup()
-                                if viewModel.keyboardMode == .alphabetic {
-                                    viewModel.keyboardMode = .numbers
-                                } else {
-                                    viewModel.keyboardMode = .alphabetic
-                                }
-                            } label: {
-                                Text(viewModel.keyboardMode == .alphabetic ? "?123" : "ABC")
-                                    .font(.system(size: 14, weight: .semibold))
-                                    .foregroundColor(Color(hex: theme.textPrimaryHex))
-                                    .frame(width: 48, height: 42)
-                                    .background(Color(hex: theme.functionalKeyColorHex))
-                                    .cornerRadius(settings.keycapStyle.cornerRadius)
-                            }
 
-                            KeyButtonView(
-                                key: KeyModel(id: "bottom_comma", primaryText: ",", alternateVariants: [",", ";", ":", "'", "\""], type: .character(",")),
-                                viewModel: viewModel
-                            )
-                            .frame(width: 34)
+                        // Row 4: Bottom Control Row
+                        if settings.useNativeIOSLayout {
+                            // Exact iOS 26 Bottom Row (IMG_1457_8c6c10.png): 42.3pt 123 + 6pt gap + 42.3pt Emoji + 6pt gap + Spacebar + 6pt gap + 90.7pt Return
+                            HStack(spacing: 6.0) {
+                                // 123 / ABC Key (42.3pt wide, 43pt tall, same translucent Liquid Glass keycap!)
+                                KeyButtonView(
+                                    key: KeyModel(
+                                        id: "ios_mode_toggle",
+                                        primaryText: viewModel.keyboardMode == .alphabetic ? "123" : "ABC",
+                                        type: .numberToggle
+                                    ),
+                                    viewModel: viewModel
+                                )
+                                .frame(width: 42.3)
 
-                            Button {
-                                viewModel.triggerHaptic()
-                                viewModel.dismissPopup()
-                                viewModel.activeDrawer = (viewModel.activeDrawer == .emojiPalette) ? .none : .emojiPalette
-                            } label: {
-                                Image(systemName: "face.smiling")
-                                    .font(.system(size: 17))
-                                    .foregroundColor(Color(hex: theme.textPrimaryHex))
-                                    .frame(width: 36, height: 42)
-                                    .background(Color(hex: theme.functionalKeyColorHex))
-                                    .cornerRadius(settings.keycapStyle.cornerRadius)
-                            }
+                                // Emoji Key (42.3pt wide, 43pt tall; long-press opens Quick Settings / Themes!)
+                                KeyButtonView(
+                                    key: KeyModel(
+                                        id: "ios_emoji_toggle",
+                                        primaryText: "emoji",
+                                        type: .emojiToggle
+                                    ),
+                                    viewModel: viewModel
+                                )
+                                .frame(width: 42.3)
 
-                            KeyButtonView(
-                                key: KeyModel(id: "bottom_spacebar", primaryText: "space", type: .spacebar),
-                                viewModel: viewModel
-                            )
-                            .frame(maxWidth: .infinity)
-                            .simultaneousGesture(
-                                DragGesture(minimumDistance: 10)
-                                    .onChanged { value in
-                                        if settings.enableSpacebarCursorTrackpad {
-                                            let offset = Int(value.translation.width / 14)
-                                            if abs(offset) > 0 {
-                                                viewModel.onAdjustCursor?(offset > 0 ? 1 : -1)
+                                // Spacebar with subtle bottom-right "A" and cursor slide
+                                KeyButtonView(
+                                    key: KeyModel(id: "ios_spacebar", primaryText: "space", type: .spacebar),
+                                    viewModel: viewModel
+                                )
+                                .frame(maxWidth: .infinity)
+                                .simultaneousGesture(
+                                    DragGesture(minimumDistance: 12)
+                                        .onChanged { value in
+                                            if settings.enableSpacebarCursorTrackpad {
+                                                let offset = Int(value.translation.width / 14)
+                                                if abs(offset) > 0 {
+                                                    viewModel.onAdjustCursor?(offset > 0 ? 1 : -1)
+                                                }
                                             }
                                         }
-                                    }
-                            )
+                                )
 
-                            KeyButtonView(
-                                key: KeyModel(id: "bottom_period", primaryText: ".", alternateVariants: [".", "?", "!", ",", "@", "/", ":", "-"], type: .character(".")),
-                                viewModel: viewModel
-                            )
-                            .frame(width: 34)
-
-                            Button {
-                                viewModel.handleKeyPress(KeyModel(id: "bottom_return", primaryText: "return", type: .returnKey))
-                            } label: {
-                                Image(systemName: "return")
-                                    .font(.system(size: 16, weight: .semibold))
-                                    .foregroundColor(.white)
-                                    .frame(width: 54, height: 42)
-                                    .background(Color(hex: theme.accentColorHex))
-                                    .cornerRadius(settings.keycapStyle.cornerRadius)
+                                // Return Key (90.7pt wide, 43pt tall, same translucent Liquid Glass keycap!)
+                                KeyButtonView(
+                                    key: KeyModel(id: "ios_return", primaryText: "return", type: .returnKey),
+                                    viewModel: viewModel
+                                )
+                                .frame(width: 90.7)
                             }
+                            .padding(.horizontal, 6.5)
+                            .zIndex(5)
+                        } else {
+                            // Standard Gboard Android Bottom Row (?123, Comma, Emoji, G English Spacebar, Period, Return)
+                            HStack(spacing: 5) {
+                                KeyButtonView(
+                                    key: KeyModel(
+                                        id: "gb_mode_toggle",
+                                        primaryText: viewModel.keyboardMode == .alphabetic ? "?123" : "ABC",
+                                        type: .numberToggle
+                                    ),
+                                    viewModel: viewModel
+                                )
+                                .frame(width: 46)
+
+                                KeyButtonView(
+                                    key: KeyModel(id: "bottom_comma", primaryText: ",", alternateVariants: [",", ";", ":", "'", "\""], type: .character(",")),
+                                    viewModel: viewModel
+                                )
+                                .frame(width: 34)
+
+                                KeyButtonView(
+                                    key: KeyModel(id: "gb_emoji_toggle", primaryText: "emoji", type: .emojiToggle),
+                                    viewModel: viewModel
+                                )
+                                .frame(width: 38)
+
+                                KeyButtonView(
+                                    key: KeyModel(id: "bottom_spacebar", primaryText: "space", type: .spacebar),
+                                    viewModel: viewModel
+                                )
+                                .frame(maxWidth: .infinity)
+                                .simultaneousGesture(
+                                    DragGesture(minimumDistance: 12)
+                                        .onChanged { value in
+                                            if settings.enableSpacebarCursorTrackpad {
+                                                let offset = Int(value.translation.width / 14)
+                                                if abs(offset) > 0 {
+                                                    viewModel.onAdjustCursor?(offset > 0 ? 1 : -1)
+                                                }
+                                            }
+                                        }
+                                )
+
+                                KeyButtonView(
+                                    key: KeyModel(id: "bottom_period", primaryText: ".", alternateVariants: [".", "?", "!", ",", "@", "/", ":", "-"], type: .character(".")),
+                                    viewModel: viewModel
+                                )
+                                .frame(width: 34)
+
+                                KeyButtonView(
+                                    key: KeyModel(id: "bottom_return", primaryText: "return", type: .returnKey),
+                                    viewModel: viewModel
+                                )
+                                .frame(width: 58)
+                            }
+                            .padding(.horizontal, 6.5)
+                            .zIndex(5)
                         }
-                        .padding(.horizontal, 2)
-                        .zIndex(5)
                     }
                 }
+                Spacer(minLength: 3)
             }
-            .padding(.top, 2)
-            .padding(.bottom, 2)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(Color(hex: theme.backgroundColorHex).ignoresSafeArea())
+            .background(isLiquidGlass ? Color.clear : Color(hex: theme.backgroundColorHex).ignoresSafeArea())
         }
     }
 }

@@ -71,27 +71,23 @@ jobs:
             chmod +x build/Payload/GBoardApp.app/PlugIns/GBoardKeyboardExtension.appex/GBoardKeyboardExtension
           fi
 
-          # Ensure concrete metadata and UILaunchScreen for native full-screen display on modern iPhones
           plutil -replace CFBundleExecutable -string "GBoardApp" build/Payload/GBoardApp.app/Info.plist
           plutil -replace CFBundleIdentifier -string "com.gbios.app" build/Payload/GBoardApp.app/Info.plist
           plutil -replace CFBundleName -string "GBoardApp" build/Payload/GBoardApp.app/Info.plist
           plutil -replace CFBundleDisplayName -string "gbios" build/Payload/GBoardApp.app/Info.plist
-          plutil -replace CFBundleShortVersionString -string "1.2.0" build/Payload/GBoardApp.app/Info.plist
-          plutil -replace CFBundleVersion -string "3" build/Payload/GBoardApp.app/Info.plist
+          plutil -replace CFBundleShortVersionString -string "1.4.0" build/Payload/GBoardApp.app/Info.plist
+          plutil -replace CFBundleVersion -string "5" build/Payload/GBoardApp.app/Info.plist
           plutil -replace UILaunchScreen -xml "<dict/>" build/Payload/GBoardApp.app/Info.plist
 
           plutil -replace CFBundleExecutable -string "GBoardKeyboardExtension" build/Payload/GBoardApp.app/PlugIns/GBoardKeyboardExtension.appex/Info.plist
           plutil -replace CFBundleIdentifier -string "com.gbios.app.keyboard" build/Payload/GBoardApp.app/PlugIns/GBoardKeyboardExtension.appex/Info.plist
           plutil -replace CFBundleName -string "GBoardKeyboardExtension" build/Payload/GBoardApp.app/PlugIns/GBoardKeyboardExtension.appex/Info.plist
           plutil -replace CFBundleDisplayName -string "gbios" build/Payload/GBoardApp.app/PlugIns/GBoardKeyboardExtension.appex/Info.plist
-          plutil -replace CFBundleShortVersionString -string "1.2.0" build/Payload/GBoardApp.app/PlugIns/GBoardKeyboardExtension.appex/Info.plist
-          plutil -replace CFBundleVersion -string "3" build/Payload/GBoardApp.app/PlugIns/GBoardKeyboardExtension.appex/Info.plist
+          plutil -replace CFBundleShortVersionString -string "1.4.0" build/Payload/GBoardApp.app/PlugIns/GBoardKeyboardExtension.appex/Info.plist
+          plutil -replace CFBundleVersion -string "5" build/Payload/GBoardApp.app/PlugIns/GBoardKeyboardExtension.appex/Info.plist
 
           plutil -convert binary1 build/Payload/GBoardApp.app/Info.plist
           plutil -convert binary1 build/Payload/GBoardApp.app/PlugIns/GBoardKeyboardExtension.appex/Info.plist
-
-          echo "=== Verified GBoardApp Info.plist ==="
-          plutil -p build/Payload/GBoardApp.app/Info.plist
 
           rm -rf build/Payload/GBoardApp.app/_CodeSignature
           rm -rf build/Payload/GBoardApp.app/PlugIns/GBoardKeyboardExtension.appex/_CodeSignature
@@ -115,18 +111,16 @@ jobs:
         if: github.event_name == 'push'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.2.${{ github.run_number }}
-          name: "gbios v1.2.${{ github.run_number }} (Unsigned IPA)"
+          tag_name: v1.4.${{ github.run_number }}
+          name: "gbios v1.4.${{ github.run_number }} (Unsigned IPA)"
           body: |
             Automated Unsigned IPA build of **gbios** (Gboard for iOS) from commit `${{ github.sha }}`.
 
-            ### What's Fixed & Improved in v1.2:
-            - **Full-Screen Host App**: Restored `UILaunchScreen` metadata so the app fills the entire modern iPhone display without top/bottom black letterboxing bars.
-            - **Interactive Long-Press Key Popups**: Holding a key now opens a clickable & slide-selectable popup bar (plus a quick-select bar in the suggestion strip) so you can tap or slide to any secondary number, symbol, or accent.
-            - **Working `?123` & `=\<` Number/Symbol Pages**: Added complete Android Gboard Numbers/Punctuation and Secondary Symbols layouts with instant mode switching.
-            - **Hold-to-Delete Backspace**: Holding the backspace key now continuously deletes characters and accelerates on longer holds.
-            - **Live Theme & Settings Sync + In-Keyboard Palette**: Added multi-channel settings synchronization (works even when sideloaded via Feather/ESign without App Groups) plus a dedicated **Theme & Quick Settings** palette icon directly in the keyboard toolbar.
-            - **Centered Toolbar & 3-Column Suggestion Strip + Reduced Bezels**: Evenly centered all toolbar icons and suggestion columns, and matched the `UIInputViewController` background to the active theme edge-to-edge.
+            ### What's New in v1.4 (Pixel-Matched iOS 26 Liquid Glass & Zero-Latency Typing):
+            - **Zero-Seam Liquid Glass Container**: Set the extension container background to `.clear` so the system iOS 26 Liquid Glass blur backdrop shines through continuously from the top edge to the bottom Globe/Mic bar with zero top or bottom chin color seam.
+            - **1:1 Pixel-Matched iOS Geometry**: Matched exact measurements from the native iOS keyboard (`43pt` key height, `11pt` vertical row spacing, `6pt` horizontal key spacing, `8.5pt` continuous corner radius, `25.8pt` Row 2 inset, `44pt` Shift/Delete with `13.5pt` inner gap, and `42.3pt` / `90.7pt` bottom row keys with the subtle `"A"` indicator on the spacebar).
+            - **Uniform Translucent Liquid Glass Keycaps**: Matched the semi-translucent glass tint (`#36FFFFFF` with `0.5pt` specular border) across all character and functional keys.
+            - **Zero-Latency Touch-Down Haptics & Typing**: Moved haptic & click feedback to the first millisecond of touch-down (`!isPressed`) and decoupled document context updates from re-rendering all 33 keys on every keystroke.
           files: build/gbios-unsigned.ipa
           draft: false
           prerelease: false

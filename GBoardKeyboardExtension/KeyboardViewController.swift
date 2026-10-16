@@ -57,30 +57,46 @@ class KeyboardViewController: UIInputViewController {
     }
 
     private func applyThemeBackground() {
-        let theme = KeyboardSettings.shared.currentTheme
-        let bgColor = UIColor(Color(hex: theme.backgroundColorHex))
-        view.backgroundColor = bgColor
-        inputView?.backgroundColor = bgColor
-        view.superview?.backgroundColor = bgColor
-        hostingController?.view.backgroundColor = bgColor
+        let settings = KeyboardSettings.shared
+        let theme = settings.currentTheme
+        if settings.useNativeIOSLayout || theme.useFrostedGlass {
+            // Use completely clear background so iOS 26 system Liquid Glass backdrop shines through seamlessly with zero top/bottom chin seam
+            view.backgroundColor = .clear
+            inputView?.backgroundColor = .clear
+            view.superview?.backgroundColor = .clear
+            hostingController?.view.backgroundColor = .clear
+        } else {
+            let bgColor = UIColor(Color(hex: theme.backgroundColorHex))
+            view.backgroundColor = bgColor
+            inputView?.backgroundColor = bgColor
+            view.superview?.backgroundColor = bgColor
+            hostingController?.view.backgroundColor = bgColor
+        }
     }
 
     private func updateKeyboardHeight() {
-        let hasNumberRow = KeyboardSettings.shared.showDedicatedNumberRow
-        let targetHeight: CGFloat = hasNumberRow ? 286 : 246
-        heightConstraint?.constant = targetHeight
+        let settings = KeyboardSettings.shared
+        if settings.useNativeIOSLayout {
+            heightConstraint?.constant = 268
+        } else {
+            let hasNumberRow = settings.showDedicatedNumberRow
+            heightConstraint?.constant = hasNumberRow ? 286 : 254
+        }
     }
 
     private func setupCallbacks() {
-        viewModel.onInsertText = { [weak self] text in
-            self?.textDocumentProxy.insertText(text)
+        viewModel.onPlayClick = { [weak self] in
             self?.playClick()
-            self?.refreshDocumentContext()
+        }
+        viewModel.onInsertText = { [weak self] text in
+            guard let self = self else { return }
+            self.textDocumentProxy.insertText(text)
+            self.refreshDocumentContextAsync()
         }
         viewModel.onDeleteBackward = { [weak self] in
-            self?.textDocumentProxy.deleteBackward()
-            self?.playClick()
-            self?.refreshDocumentContext()
+            guard let self = self else { return }
+            self.textDocumentProxy.deleteBackward()
+            self.refreshDocumentContextAsync()
         }
         viewModel.onNextKeyboard = { [weak self] in
             self?.advanceToNextInputMode()
@@ -99,32 +115,28 @@ class KeyboardViewController: UIInputViewController {
                 }
             }
             self.textDocumentProxy.insertText(newText)
-            self.refreshDocumentContext()
+            self.refreshDocumentContextAsync()
         }
     }
 
-    private func refreshDocumentContext() {
-        viewModel.updateContext(
-            before: textDocumentProxy.documentContextBeforeInput,
-            after: textDocumentProxy.documentContextAfterInput
-        )
+    private func refreshDocumentContextAsync() {
+        let before = textDocumentProxy.documentContextBeforeInput
+        let after = textDocumentProxy.documentContextAfterInput
+        viewModel.updateContext(before: before, after: after)
     }
 
     private func setupSwiftUIHierarchy() {
         let rootView = MainKeyboardView(viewModel: viewModel)
         let host = UIHostingController(rootView: rootView)
         host.view.translatesAutoresizingMaskIntoConstraints = false
-
-        let theme = KeyboardSettings.shared.currentTheme
-        let bgColor = UIColor(Color(hex: theme.backgroundColorHex))
-        host.view.backgroundColor = bgColor
-        view.backgroundColor = bgColor
+        host.view.backgroundColor = .clear
+        view.backgroundColor = .clear
 
         addChild(host)
         view.addSubview(host.view)
         host.didMove(toParent: self)
 
-        let initialHeight: CGFloat = KeyboardSettings.shared.showDedicatedNumberRow ? 286 : 246
+        let initialHeight: CGFloat = KeyboardSettings.shared.useNativeIOSLayout ? 268 : (KeyboardSettings.shared.showDedicatedNumberRow ? 286 : 254)
         let hc = host.view.heightAnchor.constraint(equalToConstant: initialHeight)
         hc.priority = UILayoutPriority(999)
         self.heightConstraint = hc
@@ -138,6 +150,7 @@ class KeyboardViewController: UIInputViewController {
         ])
 
         self.hostingController = host
+        applyThemeBackground()
     }
 
     private func playClick() {

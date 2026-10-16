@@ -26,8 +26,10 @@ public final class KeyboardViewModel: ObservableObject {
     @Published public var isShifted: Bool = false
     @Published public var isCapsLock: Bool = false
     @Published public var needsInputModeSwitchKey: Bool = false
-    @Published public var contextBefore: String = ""
-    @Published public var contextAfter: String = ""
+
+    // Non-published document context so typing a character doesn't invalidate all 33 KeyButtonViews!
+    public var contextBefore: String = ""
+    public var contextAfter: String = ""
 
     // Interactive Long-Press Popup State
     @Published public var activePopupKeyId: String? = nil
@@ -35,9 +37,9 @@ public final class KeyboardViewModel: ObservableObject {
     @Published public var selectedVariantIndex: Int = 0
 
     // Predictions & Inline Calculator
-    @Published public var suggestions: [String] = ["the", "I", "to"]
-    @Published public var currentWordPrefix: String = ""
-    @Published public var calculatedMathResult: String?
+    @Published public var suggestions: [String] = ["I", "the", "to"]
+    public var currentWordPrefix: String = ""
+    @Published public var calculatedMathResult: String? = nil
     @Published public var isIncognito: Bool = false
 
     // Gboard Translate state
@@ -46,6 +48,7 @@ public final class KeyboardViewModel: ObservableObject {
     @Published public var isTranslating: Bool = false
 
     // Callbacks to UIInputViewController
+    public var onPlayClick: (() -> Void)?
     public var onInsertText: ((String) -> Void)?
     public var onDeleteBackward: (() -> Void)?
     public var onNextKeyboard: (() -> Void)?
@@ -54,8 +57,8 @@ public final class KeyboardViewModel: ObservableObject {
     public var onReplaceRange: ((Int, String) -> Void)?
 
     private var lastShiftTap: Date = .distantPast
-    private let hapticGenerator = UIImpactFeedbackGenerator(style: .light)
-    private let mediumHapticGenerator = UIImpactFeedbackGenerator(style: .medium)
+    private let touchDownHaptic = UIImpactFeedbackGenerator(style: .rigid)
+    private let popupHaptic = UIImpactFeedbackGenerator(style: .medium)
 
     // Continuous Backspace Timer
     private var backspaceDelayTimer: Timer?
@@ -72,25 +75,47 @@ public final class KeyboardViewModel: ObservableObject {
         "two", "more", "write", "go", "see", "number", "no", "way", "could", "people",
         "hello", "help", "here", "home", "happy", "thanks", "thank", "today", "tomorrow",
         "great", "good", "going", "getting", "gboard", "keyboard", "iphone", "awesome",
-        "because", "before", "better", "between", "please", "pretty", "problem", "project"
+        "because", "before", "better", "between", "please", "pretty", "problem", "project",
+        "world", "worlds", "world's", "work", "working", "would"
     ]
 
     public init() {
-        hapticGenerator.prepare()
-        mediumHapticGenerator.prepare()
+        touchDownHaptic.prepare()
+        popupHaptic.prepare()
+    }
+
+    // Fired on exact millisecond of touch-down for native iOS zero-latency tactile feel
+    public func triggerTouchDownFeedback() {
+        onPlayClick?()
+        if KeyboardSettings.shared.enableHapticFeedback {
+            touchDownHaptic.impactOccurred(intensity: 0.75)
+            touchDownHaptic.prepare()
+        }
+    }
+
+    public func triggerHaptic() {
+        guard KeyboardSettings.shared.enableHapticFeedback else { return }
+        touchDownHaptic.impactOccurred(intensity: 0.7)
+        touchDownHaptic.prepare()
     }
 
     public func updateContext(before: String?, after: String?) {
-        self.contextBefore = before ?? ""
+        let newBefore = before ?? ""
+        self.contextBefore = newBefore
         self.contextAfter = after ?? ""
 
-        if KeyboardSettings.shared.enableInlineCalculator {
-            self.calculatedMathResult = MathCalculator.shared.evaluateExpressionInText(contextBefore)
-        } else {
+        // Only run math regex if text contains arithmetic operators
+        if KeyboardSettings.shared.enableInlineCalculator &&
+            (newBefore.contains("+") || newBefore.contains("-") || newBefore.contains("*") || newBefore.contains("/")) {
+            let newCalc = MathCalculator.shared.evaluateExpressionInText(newBefore)
+            if newCalc != self.calculatedMathResult {
+                self.calculatedMathResult = newCalc
+            }
+        } else if self.calculatedMathResult != nil {
             self.calculatedMathResult = nil
         }
 
-        updateSuggestions(from: self.contextBefore)
+        updateSuggestions(from: newBefore)
     }
 
     private func updateSuggestions(from before: String) {
@@ -98,43 +123,44 @@ public final class KeyboardViewModel: ObservableObject {
         let lastToken = components.last ?? ""
         self.currentWordPrefix = lastToken
 
-        guard !lastToken.isEmpty else {
-            self.suggestions = ["I", "the", "to"]
-            return
-        }
-
-        let lower = lastToken.lowercased()
-        var matches = commonVocabulary.filter { $0.hasPrefix(lower) && $0 != lower }
-        if isShifted || (lastToken.first?.isUppercase == true) {
-            matches = matches.map { $0.prefix(1).uppercased() + $0.dropFirst() }
-        }
-
-        var result: [String] = [lastToken]
-        for m in matches.prefix(2) {
-            result.append(m)
-        }
-        while result.count < 3 {
-            let defaults = ["the", "and", "to"]
-            for d in defaults where !result.contains(d) && result.count < 3 {
-                result.append(d)
+        let newSuggestions: [String]
+        if lastToken.isEmpty {
+            newSuggestions = ["I", "the", "to"]
+        } else {
+            let lower = lastToken.lowercased()
+            var matches = commonVocabulary.filter { $0.hasPrefix(lower) && $0 != lower }
+            if isShifted || (lastToken.first?.isUppercase == true) {
+                matches = matches.map { $0.prefix(1).uppercased() + $0.dropFirst() }
             }
-            break
+            var result: [String] = ["\"\(lastToken)\""]
+            for m in matches.prefix(2) {
+                result.append(m)
+            }
+            let fallbacks = [lastToken + "s", lastToken + "'s", "the", "and"]
+            for f in fallbacks where result.count < 3 && !result.contains(f) {
+                result.append(f)
+            }
+            newSuggestions = Array(result.prefix(3))
         }
-        self.suggestions = Array(result.prefix(3))
+
+        if newSuggestions != self.suggestions {
+            self.suggestions = newSuggestions
+        }
     }
 
     public func applySuggestion(_ word: String) {
-        triggerHaptic()
+        triggerTouchDownFeedback()
         dismissPopup()
+        let cleanWord = word.trimmingCharacters(in: CharacterSet(charactersIn: "\""))
         if activeDrawer == .translate {
-            translateInputBuffer.append(word + " ")
+            translateInputBuffer.append(cleanWord + " ")
             retranslateActiveBuffer()
             return
         }
         if !currentWordPrefix.isEmpty {
-            onReplaceRange?(currentWordPrefix.count, word + " ")
+            onReplaceRange?(currentWordPrefix.count, cleanWord + " ")
         } else {
-            insertText(word + " ")
+            insertText(cleanWord + " ")
         }
     }
 
@@ -142,13 +168,13 @@ public final class KeyboardViewModel: ObservableObject {
     public func startContinuousBackspace() {
         stopContinuousBackspace()
         dismissPopup()
-        triggerHaptic()
+        triggerTouchDownFeedback()
         performSingleBackspace()
         backspaceTickCount = 0
 
-        backspaceDelayTimer = Timer.scheduledTimer(withTimeInterval: 0.35, repeats: false) { [weak self] _ in
+        backspaceDelayTimer = Timer.scheduledTimer(withTimeInterval: 0.32, repeats: false) { [weak self] _ in
             guard let self = self else { return }
-            self.backspaceRepeatTimer = Timer.scheduledTimer(withTimeInterval: 0.065, repeats: true) { [weak self] _ in
+            self.backspaceRepeatTimer = Timer.scheduledTimer(withTimeInterval: 0.06, repeats: true) { [weak self] _ in
                 guard let self = self else { return }
                 self.backspaceTickCount += 1
                 self.performSingleBackspace()
@@ -190,14 +216,17 @@ public final class KeyboardViewModel: ObservableObject {
         if isShifted || isCapsLock {
             variants = variants.map { $0.uppercased() }
         }
-        mediumHapticGenerator.impactOccurred()
+        if KeyboardSettings.shared.enableHapticFeedback {
+            popupHaptic.impactOccurred()
+            popupHaptic.prepare()
+        }
         activePopupKeyId = key.id
         activePopupVariants = variants
         selectedVariantIndex = 0
     }
 
     public func selectPopupVariant(_ variant: String) {
-        triggerHaptic()
+        triggerTouchDownFeedback()
         routeTypedCharacter(variant)
         if isShifted && !isCapsLock {
             isShifted = false
@@ -206,15 +235,19 @@ public final class KeyboardViewModel: ObservableObject {
     }
 
     public func dismissPopup() {
-        activePopupKeyId = nil
-        activePopupVariants = []
-        selectedVariantIndex = 0
+        if activePopupKeyId != nil {
+            activePopupKeyId = nil
+            activePopupVariants = []
+            selectedVariantIndex = 0
+        }
     }
 
-    // MARK: - Key Press Handling
-    public func handleKeyPress(_ key: KeyModel) {
+    // MARK: - Key Press Handling (haptic already fired on touch-down!)
+    public func handleKeyPress(_ key: KeyModel, playFeedback: Bool = false) {
         dismissPopup()
-        triggerHaptic()
+        if playFeedback {
+            triggerTouchDownFeedback()
+        }
         switch key.type {
         case .character(let char):
             let output = (keyboardMode == .alphabetic && (isShifted || isCapsLock)) ? char.uppercased() : char
@@ -345,11 +378,6 @@ public final class KeyboardViewModel: ObservableObject {
             }
         }
         lastShiftTap = now
-    }
-
-    public func triggerHaptic() {
-        guard KeyboardSettings.shared.enableHapticFeedback else { return }
-        hapticGenerator.impactOccurred()
     }
 
     public func refreshClipboard() {

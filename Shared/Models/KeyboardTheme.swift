@@ -1,13 +1,15 @@
 import SwiftUI
 
 public enum KeycapStyle: String, Codable, CaseIterable {
+    case iosLiquidGlass = "iOS Liquid Glass"
     case belkaRounded = "Belka Pill (Material 3)"
     case classic = "Classic Rectangular"
 
     public var cornerRadius: CGFloat {
         switch self {
+        case .iosLiquidGlass: return 8.5
         case .belkaRounded: return 12.0
-        case .classic: return 5.0
+        case .classic: return 5.5
         }
     }
 }
@@ -48,31 +50,31 @@ public struct KeyboardTheme: Identifiable, Codable, Equatable {
         self.useFrostedGlass = useFrostedGlass
     }
 
-    // Apple iOS Native Dark Theme
+    // Apple iOS 26 Liquid Glass Dark (Transparent container + uniform translucent glass keys RGB ~70,70,70)
     public static let iosNativeDark = KeyboardTheme(
         id: "ios_native_dark",
-        name: "iOS Native Dark",
+        name: "iOS Liquid Glass Dark",
         isDark: true,
-        backgroundColorHex: "#1C1C1E",
-        keyColorHex: "#4D4D51",
-        functionalKeyColorHex: "#313134",
-        accentColorHex: "#007AFF",
+        backgroundColorHex: "#00000000",
+        keyColorHex: "#36FFFFFF",
+        functionalKeyColorHex: "#36FFFFFF",
+        accentColorHex: "#0A84FF",
         textPrimaryHex: "#FFFFFF",
-        textSecondaryHex: "#8E8E93",
+        textSecondaryHex: "#8CFFFFFF",
         useFrostedGlass: true
     )
 
-    // Apple iOS Native Light Theme
+    // Apple iOS 26 Liquid Glass Light
     public static let iosNativeLight = KeyboardTheme(
         id: "ios_native_light",
-        name: "iOS Native Light",
+        name: "iOS Liquid Glass Light",
         isDark: false,
-        backgroundColorHex: "#D1D3D9",
-        keyColorHex: "#FFFFFF",
-        functionalKeyColorHex: "#B4B7BF",
+        backgroundColorHex: "#00000000",
+        keyColorHex: "#D9FFFFFF",
+        functionalKeyColorHex: "#B8FFFFFF",
         accentColorHex: "#007AFF",
         textPrimaryHex: "#000000",
-        textSecondaryHex: "#6C6C70",
+        textSecondaryHex: "#7A000000",
         useFrostedGlass: true
     )
 
@@ -109,12 +111,12 @@ public struct KeyboardTheme: Identifiable, Codable, Equatable {
         id: "frosted_glass",
         name: "Frosted Glass Blur",
         isDark: true,
-        backgroundColorHex: "#1E1E1ECC",
-        keyColorHex: "#2C2C2EAA",
-        functionalKeyColorHex: "#3A3A3CDD",
+        backgroundColorHex: "#00000000",
+        keyColorHex: "#36FFFFFF",
+        functionalKeyColorHex: "#36FFFFFF",
         accentColorHex: "#0A84FF",
         textPrimaryHex: "#FFFFFF",
-        textSecondaryHex: "#EBEBF599",
+        textSecondaryHex: "#99EBEBF5",
         useFrostedGlass: true
     )
 

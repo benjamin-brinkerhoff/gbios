@@ -7,10 +7,10 @@ public final class KeyboardSettings: ObservableObject {
 
     public static let appGroupIdentifier = "group.com.gbios.shared"
     public static let pasteboardSyncType = "com.gbios.settings.sync"
-    private let storageKey = "gbios_settings_payload_v3"
+    private let storageKey = "gbios_settings_payload_v4"
     private var isReloading = false
 
-    @Published public var useNativeIOSLayout: Bool = false { didSet { persistIfNeeded() } }
+    @Published public var useNativeIOSLayout: Bool = true { didSet { persistIfNeeded() } }
     @Published public var showSecondarySymbols: Bool = true { didSet { persistIfNeeded() } }
     @Published public var showDedicatedNumberRow: Bool = false { didSet { persistIfNeeded() } }
     @Published public var enableKeyPopups: Bool = true { didSet { persistIfNeeded() } }
@@ -19,9 +19,9 @@ public final class KeyboardSettings: ObservableObject {
     @Published public var enableInlineCalculator: Bool = true { didSet { persistIfNeeded() } }
     @Published public var enableHapticFeedback: Bool = true { didSet { persistIfNeeded() } }
     @Published public var enableKeyClickSound: Bool = true { didSet { persistIfNeeded() } }
-    @Published public var showGLogoOnSpacebar: Bool = true { didSet { persistIfNeeded() } }
-    @Published public var keycapStyleRaw: String = KeycapStyle.belkaRounded.rawValue { didSet { persistIfNeeded() } }
-    @Published public var selectedThemeId: String = KeyboardTheme.material3Dynamic.id { didSet { persistIfNeeded() } }
+    @Published public var showGLogoOnSpacebar: Bool = false { didSet { persistIfNeeded() } }
+    @Published public var keycapStyleRaw: String = KeycapStyle.iosLiquidGlass.rawValue { didSet { persistIfNeeded() } }
+    @Published public var selectedThemeId: String = KeyboardTheme.iosNativeDark.id { didSet { persistIfNeeded() } }
     @Published public var enableRamblerVoice: Bool = true { didSet { persistIfNeeded() } }
     @Published public var ramblerRemoveFillerWords: Bool = true { didSet { persistIfNeeded() } }
     @Published public var ramblerAutoPunctuation: Bool = true { didSet { persistIfNeeded() } }
@@ -46,7 +46,7 @@ public final class KeyboardSettings: ObservableObject {
     private var sharedFileURL: URL? {
         FileManager.default
             .containerURL(forSecurityApplicationGroupIdentifier: KeyboardSettings.appGroupIdentifier)?
-            .appendingPathComponent("gbios_settings_v3.json")
+            .appendingPathComponent("gbios_settings_v4.json")
     }
 
     private func persistIfNeeded() {
@@ -181,22 +181,26 @@ public final class KeyboardSettings: ObservableObject {
         if useNativeIOSLayout && selectedThemeId != KeyboardTheme.iosNativeDark.id && selectedThemeId != KeyboardTheme.iosNativeLight.id {
             return .iosNativeDark
         }
-        return KeyboardTheme.allThemes.first(where: { $0.id == selectedThemeId }) ?? .material3Dynamic
+        return KeyboardTheme.allThemes.first(where: { $0.id == selectedThemeId }) ?? .iosNativeDark
     }
 
     public var keycapStyle: KeycapStyle {
         if useNativeIOSLayout {
-            return .classic
+            return .iosLiquidGlass
         }
-        return KeycapStyle(rawValue: keycapStyleRaw) ?? .belkaRounded
+        return KeycapStyle(rawValue: keycapStyleRaw) ?? .iosLiquidGlass
     }
 
     public func setNativeIOSMode(enabled: Bool, isDark: Bool = true) {
         useNativeIOSLayout = enabled
         if enabled {
             selectedThemeId = isDark ? KeyboardTheme.iosNativeDark.id : KeyboardTheme.iosNativeLight.id
-            keycapStyleRaw = KeycapStyle.classic.rawValue
+            keycapStyleRaw = KeycapStyle.iosLiquidGlass.rawValue
             showGLogoOnSpacebar = false
+        } else {
+            selectedThemeId = KeyboardTheme.material3Dynamic.id
+            keycapStyleRaw = KeycapStyle.belkaRounded.rawValue
+            showGLogoOnSpacebar = true
         }
     }
 
@@ -219,5 +223,4 @@ public final class KeyboardSettings: ObservableObject {
         }
         return String(data: pretty, encoding: .utf8)
     }
-
 }

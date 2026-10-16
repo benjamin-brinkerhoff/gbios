@@ -9,7 +9,7 @@ struct SuggestionStripView: View {
     var body: some View {
         ZStack {
             if viewModel.activePopupKeyId != nil && !viewModel.activePopupVariants.isEmpty {
-                // Clickable Long-Press Character Bar (also clickable directly in the strip!)
+                // Clickable Long-Press Character Bar
                 HStack(spacing: 6) {
                     Text("Select:")
                         .font(.system(size: 11, weight: .semibold))
@@ -22,12 +22,14 @@ struct SuggestionStripView: View {
                                     viewModel.selectPopupVariant(variant)
                                 } label: {
                                     Text(variant)
-                                        .font(.system(size: 15, weight: .bold))
+                                        .font(.system(size: 16, weight: .semibold))
                                         .foregroundColor(idx == viewModel.selectedVariantIndex ? .white : Color(hex: theme.textPrimaryHex))
-                                        .padding(.horizontal, 10)
-                                        .padding(.vertical, 3)
-                                        .background(idx == viewModel.selectedVariantIndex ? Color(hex: theme.accentColorHex) : Color(hex: theme.keyColorHex))
-                                        .cornerRadius(6)
+                                        .padding(.horizontal, 11)
+                                        .padding(.vertical, 4)
+                                        .background(
+                                            RoundedRectangle(cornerRadius: 7, style: .continuous)
+                                                .fill(idx == viewModel.selectedVariantIndex ? Color(hex: theme.accentColorHex) : Color(hex: theme.keyColorHex))
+                                        )
                                 }
                             }
                         }
@@ -39,29 +41,29 @@ struct SuggestionStripView: View {
                         viewModel.dismissPopup()
                     } label: {
                         Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 15))
+                            .font(.system(size: 16))
                             .foregroundColor(Color(hex: theme.textSecondaryHex))
                     }
                 }
                 .padding(.horizontal, 8)
             } else {
-                // Centered 3-Column Android Gboard Suggestion Strip
+                // Native iOS 26 3-Column Prediction Strip (exact match to IMG_1457_8c6c10.png)
                 HStack(spacing: 0) {
                     if let calcResult = viewModel.calculatedMathResult {
                         Button {
-                            viewModel.triggerHaptic()
+                            viewModel.triggerTouchDownFeedback()
                             viewModel.insertText(calcResult)
                         } label: {
                             HStack(spacing: 4) {
                                 Image(systemName: "equal.circle.fill")
                                     .foregroundColor(.green)
                                 Text(calcResult)
-                                    .font(.system(size: 14, weight: .bold))
+                                    .font(.system(size: 15, weight: .semibold))
                                     .foregroundColor(Color(hex: theme.textPrimaryHex))
                             }
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
-                            .background(Color(hex: theme.keyColorHex).opacity(0.6))
-                            .cornerRadius(6)
+                            .background(Color(hex: theme.keyColorHex))
+                            .cornerRadius(7)
                         }
                         .padding(.horizontal, 4)
                     }
@@ -71,22 +73,22 @@ struct SuggestionStripView: View {
                             viewModel.applySuggestion(word)
                         } label: {
                             Text(word)
-                                .font(.system(size: 14, weight: idx == 0 ? .semibold : .regular))
-                                .foregroundColor(Color(hex: theme.textPrimaryHex))
+                                .font(.system(size: 16.5, weight: .regular))
+                                .foregroundColor(Color(hex: theme.textPrimaryHex).opacity(0.92))
                                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                                 .contentShape(Rectangle())
                         }
 
                         if idx < viewModel.suggestions.count - 1 {
                             Rectangle()
-                                .fill(Color(hex: theme.textSecondaryHex).opacity(0.25))
-                                .frame(width: 1, height: 16)
+                                .fill(Color.white.opacity(theme.isDark ? 0.16 : 0.25))
+                                .frame(width: 0.6, height: 20)
                         }
                     }
                 }
-                .padding(.horizontal, 4)
+                .padding(.horizontal, 2)
             }
         }
-        .frame(height: 30)
+        .frame(height: 38)
     }
 }
