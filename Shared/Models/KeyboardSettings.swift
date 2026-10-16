@@ -210,4 +210,14 @@ public final class KeyboardSettings: ObservableObject {
         translateSourceLang = translateTargetLang
         translateTargetLang = temp
     }
+
+    public func exportConfigurationJSON() -> String? {
+        guard let data = encodeToData(),
+              let obj = try? JSONSerialization.jsonObject(with: data),
+              let pretty = try? JSONSerialization.data(withJSONObject: obj, options: .prettyPrinted) else {
+            return nil
+        }
+        return String(data: pretty, encoding: .utf8)
+    }
+
 }
