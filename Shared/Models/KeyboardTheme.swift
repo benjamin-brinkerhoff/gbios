@@ -48,6 +48,35 @@ public struct KeyboardTheme: Identifiable, Codable, Equatable {
         self.useFrostedGlass = useFrostedGlass
     }
 
+    // Apple iOS Native Dark Theme
+    public static let iosNativeDark = KeyboardTheme(
+        id: "ios_native_dark",
+        name: "iOS Native Dark",
+        isDark: true,
+        backgroundColorHex: "#1C1C1E",
+        keyColorHex: "#4D4D51",
+        functionalKeyColorHex: "#313134",
+        accentColorHex: "#007AFF",
+        textPrimaryHex: "#FFFFFF",
+        textSecondaryHex: "#8E8E93",
+        useFrostedGlass: true
+    )
+
+    // Apple iOS Native Light Theme
+    public static let iosNativeLight = KeyboardTheme(
+        id: "ios_native_light",
+        name: "iOS Native Light",
+        isDark: false,
+        backgroundColorHex: "#D1D3D9",
+        keyColorHex: "#FFFFFF",
+        functionalKeyColorHex: "#B4B7BF",
+        accentColorHex: "#007AFF",
+        textPrimaryHex: "#000000",
+        textSecondaryHex: "#6C6C70",
+        useFrostedGlass: true
+    )
+
+    // Google Material 3 Dynamic Pixel Theme
     public static let material3Dynamic = KeyboardTheme(
         id: "material3_dynamic",
         name: "Material 3 Dynamic (Pixel)",
@@ -61,6 +90,7 @@ public struct KeyboardTheme: Identifiable, Codable, Equatable {
         useFrostedGlass: false
     )
 
+    // AMOLED True Black
     public static let amoledBlack = KeyboardTheme(
         id: "amoled_black",
         name: "AMOLED True Black",
@@ -74,6 +104,7 @@ public struct KeyboardTheme: Identifiable, Codable, Equatable {
         useFrostedGlass: false
     )
 
+    // Frosted Glass Blur
     public static let frostedGlass = KeyboardTheme(
         id: "frosted_glass",
         name: "Frosted Glass Blur",
@@ -87,6 +118,7 @@ public struct KeyboardTheme: Identifiable, Codable, Equatable {
         useFrostedGlass: true
     )
 
+    // Pixel Ocean Blue
     public static let pixelBlue = KeyboardTheme(
         id: "pixel_blue",
         name: "Pixel Ocean Blue",
@@ -100,6 +132,7 @@ public struct KeyboardTheme: Identifiable, Codable, Equatable {
         useFrostedGlass: false
     )
 
+    // Sage Mint Green
     public static let mintGreen = KeyboardTheme(
         id: "mint_green",
         name: "Sage Mint Green",
@@ -114,6 +147,6 @@ public struct KeyboardTheme: Identifiable, Codable, Equatable {
     )
 
     public static let allThemes: [KeyboardTheme] = [
-        material3Dynamic, amoledBlack, frostedGlass, pixelBlue, mintGreen
+        iosNativeDark, iosNativeLight, material3Dynamic, amoledBlack, frostedGlass, pixelBlue, mintGreen
     ]
 }

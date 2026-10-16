@@ -9,7 +9,7 @@ struct QuickSettingsDrawerView: View {
     var body: some View {
         VStack(spacing: 8) {
             HStack {
-                Text("🎨 Themes & Quick Settings")
+                Text("🎨 Themes & Layout Mode")
                     .font(.system(size: 13, weight: .bold))
                     .foregroundColor(Color(hex: theme.textPrimaryHex))
                 Spacer()
@@ -22,6 +22,45 @@ struct QuickSettingsDrawerView: View {
             .padding(.horizontal, 10)
             .padding(.top, 4)
 
+            // Layout Mode Selector: iOS Native UI vs Gboard Android UI
+            HStack(spacing: 8) {
+                Button {
+                    viewModel.triggerHaptic()
+                    settings.setNativeIOSMode(enabled: true, isDark: true)
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: settings.useNativeIOSLayout ? "checkmark.circle.fill" : "apple.logo")
+                        Text("iOS Native UI")
+                            .font(.system(size: 12, weight: settings.useNativeIOSLayout ? .bold : .medium))
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(settings.useNativeIOSLayout ? Color(hex: theme.accentColorHex) : Color(hex: theme.keyColorHex))
+                    .foregroundColor(settings.useNativeIOSLayout ? .white : Color(hex: theme.textPrimaryHex))
+                    .cornerRadius(8)
+                }
+
+                Button {
+                    viewModel.triggerHaptic()
+                    settings.useNativeIOSLayout = false
+                    settings.selectedThemeId = KeyboardTheme.material3Dynamic.id
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: !settings.useNativeIOSLayout ? "checkmark.circle.fill" : "g.circle")
+                        Text("Gboard Pixel UI")
+                            .font(.system(size: 12, weight: !settings.useNativeIOSLayout ? .bold : .medium))
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(!settings.useNativeIOSLayout ? Color(hex: theme.accentColorHex) : Color(hex: theme.keyColorHex))
+                    .foregroundColor(!settings.useNativeIOSLayout ? .white : Color(hex: theme.textPrimaryHex))
+                    .cornerRadius(8)
+                }
+
+                Spacer()
+            }
+            .padding(.horizontal, 10)
+
             // Theme Selector Strip
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
@@ -30,6 +69,9 @@ struct QuickSettingsDrawerView: View {
                         Button {
                             viewModel.triggerHaptic()
                             settings.selectedThemeId = item.id
+                            if item.id == KeyboardTheme.iosNativeDark.id || item.id == KeyboardTheme.iosNativeLight.id {
+                                settings.useNativeIOSLayout = true
+                            }
                         } label: {
                             HStack(spacing: 6) {
                                 Circle()
@@ -52,95 +94,9 @@ struct QuickSettingsDrawerView: View {
                 }
                 .padding(.horizontal, 10)
             }
-
-            // Quick Feature Toggles Grid
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    QuickToggleChip(
-                        title: "Number Row",
-                        isOn: settings.showDedicatedNumberRow,
-                        theme: theme
-                    ) {
-                        settings.showDedicatedNumberRow.toggle()
-                        viewModel.triggerHaptic()
-                    }
-
-                    QuickToggleChip(
-                        title: "Symbol Hints",
-                        isOn: settings.showSecondarySymbols,
-                        theme: theme
-                    ) {
-                        settings.showSecondarySymbols.toggle()
-                        viewModel.triggerHaptic()
-                    }
-
-                    QuickToggleChip(
-                        title: "Key Popups",
-                        isOn: settings.enableKeyPopups,
-                        theme: theme
-                    ) {
-                        settings.enableKeyPopups.toggle()
-                        viewModel.triggerHaptic()
-                    }
-
-                    QuickToggleChip(
-                        title: "Belka Pill Keys",
-                        isOn: settings.keycapStyle == .belkaRounded,
-                        theme: theme
-                    ) {
-                        settings.keycapStyleRaw = (settings.keycapStyle == .belkaRounded)
-                            ? KeycapStyle.classic.rawValue
-                            : KeycapStyle.belkaRounded.rawValue
-                        viewModel.triggerHaptic()
-                    }
-
-                    QuickToggleChip(
-                        title: "G Logo",
-                        isOn: settings.showGLogoOnSpacebar,
-                        theme: theme
-                    ) {
-                        settings.showGLogoOnSpacebar.toggle()
-                        viewModel.triggerHaptic()
-                    }
-
-                    QuickToggleChip(
-                        title: "Haptics",
-                        isOn: settings.enableHapticFeedback,
-                        theme: theme
-                    ) {
-                        settings.enableHapticFeedback.toggle()
-                        viewModel.triggerHaptic()
-                    }
-                }
-                .padding(.horizontal, 10)
-            }
             Spacer(minLength: 2)
         }
         .frame(height: 115)
         .background(Color(hex: theme.functionalKeyColorHex))
-    }
-}
-
-struct QuickToggleChip: View {
-    let title: String
-    let isOn: Bool
-    let theme: KeyboardTheme
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 5) {
-                Image(systemName: isOn ? "checkmark.circle.fill" : "circle")
-                    .font(.system(size: 12))
-                    .foregroundColor(isOn ? Color(hex: theme.accentColorHex) : Color(hex: theme.textSecondaryHex))
-                Text(title)
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(Color(hex: theme.textPrimaryHex))
-            }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
-            .background(Color(hex: theme.keyColorHex))
-            .cornerRadius(8)
-        }
     }
 }

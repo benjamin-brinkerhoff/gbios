@@ -12,7 +12,17 @@ struct MainSettingsView: View {
                         .padding(10)
                         .background(Color(.systemGray6))
                         .cornerRadius(8)
-                    Text("Tip: You can also change themes and toggle features directly inside the keyboard using the palette icon in the top toolbar.")
+                    Text("Tip: You can switch between Apple iOS UI and Gboard Pixel UI anytime.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+
+                Section(header: Text("Keyboard Appearance & Layout Mode")) {
+                    Toggle("Apple iOS Keyboard Layout Mode", isOn: $settings.useNativeIOSLayout)
+                        .onChange(of: settings.useNativeIOSLayout) { isIOS in
+                            settings.setNativeIOSMode(enabled: isIOS, isDark: true)
+                        }
+                    Text("When enabled, the keyboard looks identical to the native iOS keyboard (colors, clean predictive bar, 4-key bottom row) while retaining full Android-style popup keys on hold.")
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
@@ -25,7 +35,7 @@ struct MainSettingsView: View {
                         Label("Gboard Translate (13+ Languages)", systemImage: "character.bubble.fill")
                     }
                     NavigationLink(destination: ThemeGalleryView()) {
-                        Label("Theme & Keycaps (Belka M3)", systemImage: "paintpalette")
+                        Label("Theme & Keycaps", systemImage: "paintpalette")
                     }
                     NavigationLink(destination: ClipboardManagerView()) {
                         Label("Clipboard & Web Sync", systemImage: "doc.on.clipboard")
@@ -38,11 +48,10 @@ struct MainSettingsView: View {
                     }
                 }
 
-                Section(header: Text("Quick Android Gboard Toggles")) {
-                    Toggle("Gboard In-Keyboard Translate Bar", isOn: $settings.enableTranslateFeature)
+                Section(header: Text("Popup Keys & Android Enhancements")) {
                     Toggle("Secondary Symbol Hints on Keys", isOn: $settings.showSecondarySymbols)
-                    Toggle("Dedicated Number Row", isOn: $settings.showDedicatedNumberRow)
-                    Toggle("Keypress Popups & Accents", isOn: $settings.enableKeyPopups)
+                    Toggle("Keypress Popups & Accent Menus", isOn: $settings.enableKeyPopups)
+                    Toggle("Dedicated Top Number Row", isOn: $settings.showDedicatedNumberRow)
                     Toggle("Spacebar Cursor Trackpad", isOn: $settings.enableSpacebarCursorTrackpad)
                     Toggle("Inline Calculator Chip", isOn: $settings.enableInlineCalculator)
                     Toggle("Haptic Feedback on Tap", isOn: $settings.enableHapticFeedback)
@@ -52,7 +61,7 @@ struct MainSettingsView: View {
                     HStack {
                         Text("Version")
                         Spacer()
-                        Text("1.2.0 (Full Screen + Interactive Popups)")
+                        Text("1.3.0 (Native iOS UI Mode + Gboard Popups)")
                             .foregroundColor(.secondary)
                     }
                 }

@@ -7,9 +7,10 @@ public final class KeyboardSettings: ObservableObject {
 
     public static let appGroupIdentifier = "group.com.gbios.shared"
     public static let pasteboardSyncType = "com.gbios.settings.sync"
-    private let storageKey = "gbios_settings_payload_v2"
+    private let storageKey = "gbios_settings_payload_v3"
     private var isReloading = false
 
+    @Published public var useNativeIOSLayout: Bool = false { didSet { persistIfNeeded() } }
     @Published public var showSecondarySymbols: Bool = true { didSet { persistIfNeeded() } }
     @Published public var showDedicatedNumberRow: Bool = false { didSet { persistIfNeeded() } }
     @Published public var enableKeyPopups: Bool = true { didSet { persistIfNeeded() } }
@@ -45,7 +46,7 @@ public final class KeyboardSettings: ObservableObject {
     private var sharedFileURL: URL? {
         FileManager.default
             .containerURL(forSecurityApplicationGroupIdentifier: KeyboardSettings.appGroupIdentifier)?
-            .appendingPathComponent("gbios_settings_v2.json")
+            .appendingPathComponent("gbios_settings_v3.json")
     }
 
     private func persistIfNeeded() {
@@ -53,17 +54,14 @@ public final class KeyboardSettings: ObservableObject {
         lastUpdated = Date().timeIntervalSince1970
         guard let data = encodeToData() else { return }
 
-        // 1. Standard & AppGroup UserDefaults
         UserDefaults.standard.set(data, forKey: storageKey)
         UserDefaults(suiteName: KeyboardSettings.appGroupIdentifier)?.set(data, forKey: storageKey)
         UserDefaults(suiteName: KeyboardSettings.appGroupIdentifier)?.synchronize()
 
-        // 2. Shared App Group Container File
         if let url = sharedFileURL {
             try? data.write(to: url, options: .atomic)
         }
 
-        // 3. Non-destructive UIPasteboard metadata sync (works across sideloaded Feather/ESign targets even without App Groups)
         syncToPasteboardNonDestructively(data: data)
     }
 
@@ -81,32 +79,24 @@ public final class KeyboardSettings: ObservableObject {
     public func reloadFromSharedStorage() {
         var candidates: [[String: Any]] = []
 
-        // Check Standard UserDefaults
         if let d = UserDefaults.standard.data(forKey: storageKey),
            let dict = try? JSONSerialization.jsonObject(with: d) as? [String: Any] {
             candidates.append(dict)
         }
-
-        // Check App Group UserDefaults
         if let d = UserDefaults(suiteName: KeyboardSettings.appGroupIdentifier)?.data(forKey: storageKey),
            let dict = try? JSONSerialization.jsonObject(with: d) as? [String: Any] {
             candidates.append(dict)
         }
-
-        // Check Shared Container File
         if let url = sharedFileURL,
            let d = try? Data(contentsOf: url),
            let dict = try? JSONSerialization.jsonObject(with: d) as? [String: Any] {
             candidates.append(dict)
         }
-
-        // Check UIPasteboard non-destructive settings metadata
         if let d = UIPasteboard.general.data(forPasteboardType: KeyboardSettings.pasteboardSyncType),
            let dict = try? JSONSerialization.jsonObject(with: d) as? [String: Any] {
             candidates.append(dict)
         }
 
-        // Pick the candidate with the newest timestamp
         guard let newest = candidates.max(by: {
             (($0["lastUpdated"] as? Double) ?? 0) < (($1["lastUpdated"] as? Double) ?? 0)
         }) else {
@@ -123,6 +113,7 @@ public final class KeyboardSettings: ObservableObject {
         isReloading = true
         defer { isReloading = false }
 
+        if let v = dict["useNativeIOSLayout"] as? Bool { useNativeIOSLayout = v }
         if let v = dict["showSecondarySymbols"] as? Bool { showSecondarySymbols = v }
         if let v = dict["showDedicatedNumberRow"] as? Bool { showDedicatedNumberRow = v }
         if let v = dict["enableKeyPopups"] as? Bool { enableKeyPopups = v }
@@ -154,6 +145,7 @@ public final class KeyboardSettings: ObservableObject {
 
     private func encodeToData() -> Data? {
         let dict: [String: Any] = [
+            "useNativeIOSLayout": useNativeIOSLayout,
             "showSecondarySymbols": showSecondarySymbols,
             "showDedicatedNumberRow": showDedicatedNumberRow,
             "enableKeyPopups": enableKeyPopups,
@@ -186,11 +178,26 @@ public final class KeyboardSettings: ObservableObject {
     }
 
     public var currentTheme: KeyboardTheme {
-        KeyboardTheme.allThemes.first(where: { $0.id == selectedThemeId }) ?? .material3Dynamic
+        if useNativeIOSLayout && selectedThemeId != KeyboardTheme.iosNativeDark.id && selectedThemeId != KeyboardTheme.iosNativeLight.id {
+            return .iosNativeDark
+        }
+        return KeyboardTheme.allThemes.first(where: { $0.id == selectedThemeId }) ?? .material3Dynamic
     }
 
     public var keycapStyle: KeycapStyle {
-        KeycapStyle(rawValue: keycapStyleRaw) ?? .belkaRounded
+        if useNativeIOSLayout {
+            return .classic
+        }
+        return KeycapStyle(rawValue: keycapStyleRaw) ?? .belkaRounded
+    }
+
+    public func setNativeIOSMode(enabled: Bool, isDark: Bool = true) {
+        useNativeIOSLayout = enabled
+        if enabled {
+            selectedThemeId = isDark ? KeyboardTheme.iosNativeDark.id : KeyboardTheme.iosNativeLight.id
+            keycapStyleRaw = KeycapStyle.classic.rawValue
+            showGLogoOnSpacebar = false
+        }
     }
 
     public func swapTranslationLanguages() {
@@ -202,14 +209,5 @@ public final class KeyboardSettings: ObservableObject {
         let temp = translateSourceLang
         translateSourceLang = translateTargetLang
         translateTargetLang = temp
-    }
-
-    public func exportConfigurationJSON() -> String? {
-        guard let data = encodeToData(),
-              let obj = try? JSONSerialization.jsonObject(with: data),
-              let pretty = try? JSONSerialization.data(withJSONObject: obj, options: .prettyPrinted) else {
-            return nil
-        }
-        return String(data: pretty, encoding: .utf8)
     }
 }
