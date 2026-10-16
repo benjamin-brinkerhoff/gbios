@@ -32,6 +32,11 @@ class KeyboardViewController: UIInputViewController {
         updateKeyboardHeight()
     }
 
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        applyThemeBackground()
+    }
+
     override func textDidChange(_ textInput: UITextInput?) {
         viewModel.updateContext(
             before: textDocumentProxy.documentContextBeforeInput,
@@ -55,6 +60,8 @@ class KeyboardViewController: UIInputViewController {
         let theme = KeyboardSettings.shared.currentTheme
         let bgColor = UIColor(Color(hex: theme.backgroundColorHex))
         view.backgroundColor = bgColor
+        inputView?.backgroundColor = bgColor
+        view.superview?.backgroundColor = bgColor
         hostingController?.view.backgroundColor = bgColor
     }
 

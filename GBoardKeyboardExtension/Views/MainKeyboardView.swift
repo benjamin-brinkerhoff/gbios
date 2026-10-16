@@ -41,14 +41,15 @@ struct MainKeyboardView: View {
                 case .translate, .none:
                     if viewModel.activeDrawer == .translate {
                         TranslateView(viewModel: viewModel)
-                            .zIndex(2)
+                            .zIndex(100)
                     } else {
                         SuggestionStripView(viewModel: viewModel)
-                            .zIndex(2)
+                            .zIndex(100)
                     }
 
                     // Dedicated Number Row (if enabled on alphabetic mode)
                     if settings.showDedicatedNumberRow && viewModel.keyboardMode == .alphabetic {
+                        let hasActiveKey = KeyModel.dedicatedNumberRow().contains { $0.id == viewModel.activePopupKeyId }
                         HStack(spacing: 4) {
                             ForEach(KeyModel.dedicatedNumberRow()) { key in
                                 KeyButtonView(key: key, viewModel: viewModel)
@@ -56,20 +57,23 @@ struct MainKeyboardView: View {
                             }
                         }
                         .padding(.horizontal, 2)
-                        .zIndex(40)
+                        .zIndex(hasActiveKey ? 200 : 10)
                     }
 
                     // Main Key Rows (QWERTY, Numbers, or Symbols)
                     let rows = activeRows
                     ForEach(0..<rows.count, id: \.self) { rowIndex in
+                        let rowKeys = rows[rowIndex]
+                        let hasActiveKey = rowKeys.contains { $0.id == viewModel.activePopupKeyId }
+
                         HStack(spacing: 4) {
-                            ForEach(rows[rowIndex]) { key in
+                            ForEach(rowKeys) { key in
                                 KeyButtonView(key: key, viewModel: viewModel)
                                     .frame(maxWidth: key.widthMultiplier > 1.0 ? 48 : .infinity)
                             }
                         }
                         .padding(.horizontal, rowIndex == 1 && viewModel.keyboardMode == .alphabetic ? 14 : 2)
-                        .zIndex(Double(30 - rowIndex * 5))
+                        .zIndex(hasActiveKey ? 300 : Double(20 - rowIndex))
                     }
 
                     // Bottom Control Row (Android Gboard Layout: ?123/ABC, Comma, Emoji, Spacebar, Period, Return)

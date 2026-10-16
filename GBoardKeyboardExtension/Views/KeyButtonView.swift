@@ -56,33 +56,36 @@ struct KeyButtonView: View {
         )
         .overlay(
             Group {
-                if isPopupOpenForThisKey && !viewModel.activePopupVariants.isEmpty {
-                    KeyPopupBubbleView(
-                        variants: viewModel.activePopupVariants,
-                        selectedIndex: viewModel.selectedVariantIndex,
-                        theme: theme,
-                        onSelect: { chosen in
-                            viewModel.selectPopupVariant(chosen)
-                        }
-                    )
-                    .offset(y: -48)
-                    .zIndex(999)
-                } else if isPressed && settings.enableKeyPopups && isCharacterKey {
-                    // Single key tap preview bubble
-                    Text(displayLabel)
+                if settings.enableKeyPopups && isCharacterKey && (isPressed || isPopupOpenForThisKey) {
+                    // Elevated single-character Gboard preview bubble on top of the pressed key
+                    Text(currentPreviewChar)
                         .font(.system(size: 24, weight: .medium))
                         .foregroundColor(Color(hex: theme.textPrimaryHex))
-                        .frame(width: 42, height: 46)
+                        .frame(width: 44, height: 48)
                         .background(Color(hex: theme.keyColorHex))
                         .cornerRadius(10)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 10)
+                                .stroke(Color(hex: theme.accentColorHex).opacity(0.4), lineWidth: 1)
+                        )
                         .shadow(color: Color.black.opacity(0.25), radius: 4, x: 0, y: 2)
-                        .offset(y: -44)
+                        .offset(y: -46)
                         .allowsHitTesting(false)
                 }
             },
             alignment: .top
         )
-        .zIndex(isPopupOpenForThisKey || isPressed ? 100 : 1)
+        .zIndex(isPopupOpenForThisKey || isPressed ? 999 : 1)
+    }
+
+    private var currentPreviewChar: String {
+        if isPopupOpenForThisKey && !viewModel.activePopupVariants.isEmpty {
+            let idx = viewModel.selectedVariantIndex
+            if idx >= 0 && idx < viewModel.activePopupVariants.count {
+                return viewModel.activePopupVariants[idx]
+            }
+        }
+        return displayLabel
     }
 
     private var isCharacterKey: Bool {
@@ -99,13 +102,11 @@ struct KeyButtonView: View {
             isPressed = true
             longPressTriggered = false
 
-            // Backspace starts deleting immediately and repeats while held
             if key.type == .backspace {
                 viewModel.startContinuousBackspace()
                 return
             }
 
-            // Schedule long-press popup for character keys with variants/secondary symbols
             if isCharacterKey && (!key.alternateVariants.isEmpty || key.secondaryText != nil) {
                 let work = DispatchWorkItem {
                     longPressTriggered = true
@@ -115,10 +116,9 @@ struct KeyButtonView: View {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.22, execute: work)
             }
         } else if longPressTriggered && isPopupOpenForThisKey {
-            // Allow sliding left/right across popup variants while holding
             let count = viewModel.activePopupVariants.count
             if count > 1 {
-                let stepWidth: CGFloat = 30.0
+                let stepWidth: CGFloat = 28.0
                 let offsetSteps = Int(round(value.translation.width / stepWidth))
                 let clamped = max(0, min(count - 1, offsetSteps))
                 if clamped != viewModel.selectedVariantIndex {
@@ -140,8 +140,7 @@ struct KeyButtonView: View {
         }
 
         if longPressTriggered && isPopupOpenForThisKey {
-            // If user dragged horizontally across variants, insert the highlighted variant on release.
-            // If user held in place and lifted finger, keep the popup open so they can tap any popup button directly!
+            // If slid horizontally, select that variant immediately
             if abs(value.translation.width) > 14 {
                 let idx = viewModel.selectedVariantIndex
                 if idx >= 0 && idx < viewModel.activePopupVariants.count {
@@ -149,10 +148,10 @@ struct KeyButtonView: View {
                     viewModel.selectPopupVariant(chosen)
                 }
             }
+            // If held in place, keep the top selection bar open in SuggestionStripView so they can tap any variant!
             return
         }
 
-        // Standard tap
         viewModel.handleKeyPress(key)
     }
 
