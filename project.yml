@@ -1,0 +1,58 @@
+name: gbios
+options:
+  bundleIdPrefix: com.gbios
+  deploymentTarget:
+    iOS: "16.0"
+  xcodeVersion: "16.0"
+  createIntermediateGroups: true
+
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    IPHONEOS_DEPLOYMENT_TARGET: "16.0"
+    CODE_SIGNING_ALLOWED: NO
+    CODE_SIGNING_REQUIRED: NO
+    CODE_SIGN_IDENTITY: ""
+
+targets:
+  GBoardApp:
+    type: application
+    platform: iOS
+    sources:
+      - path: GBoardApp
+      - path: Shared
+    info:
+      path: GBoardApp/Info.plist
+    entitlements:
+      path: GBoardApp/GBoardApp.entitlements
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.gbios.app
+        INFOPLIST_FILE: GBoardApp/Info.plist
+        CURRENT_PROJECT_VERSION: 1
+        MARKETING_VERSION: 1.0.0
+        GENERATE_INFOPLIST_FILE: NO
+        ENABLE_BITCODE: NO
+    dependencies:
+      - target: GBoardKeyboardExtension
+        embed: true
+
+  GBoardKeyboardExtension:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: GBoardKeyboardExtension
+      - path: Shared
+    info:
+      path: GBoardKeyboardExtension/Info.plist
+    entitlements:
+      path: GBoardKeyboardExtension/GBoardKeyboardExtension.entitlements
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.gbios.app.keyboard
+        INFOPLIST_FILE: GBoardKeyboardExtension/Info.plist
+        CURRENT_PROJECT_VERSION: 1
+        MARKETING_VERSION: 1.0.0
+        GENERATE_INFOPLIST_FILE: NO
+        ENABLE_BITCODE: NO
+        SKIP_INSTALL: NO
