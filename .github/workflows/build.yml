@@ -75,16 +75,16 @@ jobs:
           plutil -replace CFBundleIdentifier -string "com.gbios.app" build/Payload/GBoardApp.app/Info.plist
           plutil -replace CFBundleName -string "GBoardApp" build/Payload/GBoardApp.app/Info.plist
           plutil -replace CFBundleDisplayName -string "gbios" build/Payload/GBoardApp.app/Info.plist
-          plutil -replace CFBundleShortVersionString -string "1.4.0" build/Payload/GBoardApp.app/Info.plist
-          plutil -replace CFBundleVersion -string "5" build/Payload/GBoardApp.app/Info.plist
+          plutil -replace CFBundleShortVersionString -string "1.5.0" build/Payload/GBoardApp.app/Info.plist
+          plutil -replace CFBundleVersion -string "6" build/Payload/GBoardApp.app/Info.plist
           plutil -replace UILaunchScreen -xml "<dict/>" build/Payload/GBoardApp.app/Info.plist
 
           plutil -replace CFBundleExecutable -string "GBoardKeyboardExtension" build/Payload/GBoardApp.app/PlugIns/GBoardKeyboardExtension.appex/Info.plist
           plutil -replace CFBundleIdentifier -string "com.gbios.app.keyboard" build/Payload/GBoardApp.app/PlugIns/GBoardKeyboardExtension.appex/Info.plist
           plutil -replace CFBundleName -string "GBoardKeyboardExtension" build/Payload/GBoardApp.app/PlugIns/GBoardKeyboardExtension.appex/Info.plist
           plutil -replace CFBundleDisplayName -string "gbios" build/Payload/GBoardApp.app/PlugIns/GBoardKeyboardExtension.appex/Info.plist
-          plutil -replace CFBundleShortVersionString -string "1.4.0" build/Payload/GBoardApp.app/PlugIns/GBoardKeyboardExtension.appex/Info.plist
-          plutil -replace CFBundleVersion -string "5" build/Payload/GBoardApp.app/PlugIns/GBoardKeyboardExtension.appex/Info.plist
+          plutil -replace CFBundleShortVersionString -string "1.5.0" build/Payload/GBoardApp.app/PlugIns/GBoardKeyboardExtension.appex/Info.plist
+          plutil -replace CFBundleVersion -string "6" build/Payload/GBoardApp.app/PlugIns/GBoardKeyboardExtension.appex/Info.plist
 
           plutil -convert binary1 build/Payload/GBoardApp.app/Info.plist
           plutil -convert binary1 build/Payload/GBoardApp.app/PlugIns/GBoardKeyboardExtension.appex/Info.plist
@@ -111,16 +111,16 @@ jobs:
         if: github.event_name == 'push'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.4.${{ github.run_number }}
-          name: "gbios v1.4.${{ github.run_number }} (Unsigned IPA)"
+          tag_name: v1.5.${{ github.run_number }}
+          name: "gbios v1.5.${{ github.run_number }} (Unsigned IPA)"
           body: |
             Automated Unsigned IPA build of **gbios** (Gboard for iOS) from commit `${{ github.sha }}`.
 
-            ### What's New in v1.4 (Pixel-Matched iOS 26 Liquid Glass & Zero-Latency Typing):
-            - **Zero-Seam Liquid Glass Container**: Set the extension container background to `.clear` so the system iOS 26 Liquid Glass blur backdrop shines through continuously from the top edge to the bottom Globe/Mic bar with zero top or bottom chin color seam.
-            - **1:1 Pixel-Matched iOS Geometry**: Matched exact measurements from the native iOS keyboard (`43pt` key height, `11pt` vertical row spacing, `6pt` horizontal key spacing, `8.5pt` continuous corner radius, `25.8pt` Row 2 inset, `44pt` Shift/Delete with `13.5pt` inner gap, and `42.3pt` / `90.7pt` bottom row keys with the subtle `"A"` indicator on the spacebar).
-            - **Uniform Translucent Liquid Glass Keycaps**: Matched the semi-translucent glass tint (`#36FFFFFF` with `0.5pt` specular border) across all character and functional keys.
-            - **Zero-Latency Touch-Down Haptics & Typing**: Moved haptic & click feedback to the first millisecond of touch-down (`!isPressed`) and decoupled document context updates from re-rendering all 33 keys on every keystroke.
+            ### What's New in v1.5:
+            - **UIKit Multi-Touch Rollover Engine (Zero Dropped Keys)**: Replaced SwiftUI's `DragGesture` with a native UIKit `UIView` touch handler (`isMultipleTouchEnabled = true`) that commits rollover keys immediately when a second thumb presses down and recovers `touchesCancelled` events, plus isolated `SuggestionState` so typing letters triggers 0 SwiftUI re-renders across the 33 keys.
+            - **Auto-Type Selected Popup Character on Release**: Pressing and holding a key now highlights the default secondary character (or any character you slide to) and automatically types it the instant you lift your finger.
+            - **1,500+ Scrollable Unicode Symbols Browser (`#+=` Page)**: Navigating to the page after Numbers (`#+=`) now opens a scrollable Unicode browser across 10 categories (Common, Math & Logic, Superscripts/Subscripts/Fractions, Arrows, Currency & Tech, Shapes & Box Drawing, Symbols & Music, Greek/Cyrillic/IPA, Enclosed/Circled, and Fancy Mathematical Alphanumeric Fonts).
+            - **Full iOS Emoji Keyboard (`IMG_1459` Match)**: Upgraded the Emoji view with the top `Search Emoji` pill bar (with live keyword search across ~1,800+ emojis), a 4-row horizontal scrolling emoji grid, and the bottom iOS category bar (`ABC`, 9 category icons with circular selection highlight, and hold-to-delete `⌫`).
           files: build/gbios-unsigned.ipa
           draft: false
           prerelease: false

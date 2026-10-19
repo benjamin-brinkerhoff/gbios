@@ -29,8 +29,8 @@ targets:
         CFBundleExecutable: GBoardApp
         CFBundleIdentifier: com.gbios.app
         CFBundlePackageType: APPL
-        CFBundleShortVersionString: "1.4.0"
-        CFBundleVersion: "5"
+        CFBundleShortVersionString: "1.5.0"
+        CFBundleVersion: "6"
         LSRequiresIPhoneOS: true
         ITSAppUsesNonExemptEncryption: false
         UILaunchScreen: {}
@@ -54,8 +54,8 @@ targets:
         PRODUCT_NAME: GBoardApp
         PRODUCT_MODULE_NAME: GBoardApp
         INFOPLIST_FILE: GBoardApp/Info.plist
-        CURRENT_PROJECT_VERSION: 5
-        MARKETING_VERSION: 1.4.0
+        CURRENT_PROJECT_VERSION: 6
+        MARKETING_VERSION: 1.5.0
         GENERATE_INFOPLIST_FILE: NO
         ENABLE_BITCODE: NO
     dependencies:
@@ -76,8 +76,8 @@ targets:
         CFBundleExecutable: GBoardKeyboardExtension
         CFBundleIdentifier: com.gbios.app.keyboard
         CFBundlePackageType: "XPC!"
-        CFBundleShortVersionString: "1.4.0"
-        CFBundleVersion: "5"
+        CFBundleShortVersionString: "1.5.0"
+        CFBundleVersion: "6"
         UIDeviceFamily:
           - 1
           - 2
@@ -97,8 +97,8 @@ targets:
         PRODUCT_NAME: GBoardKeyboardExtension
         PRODUCT_MODULE_NAME: GBoardKeyboardExtension
         INFOPLIST_FILE: GBoardKeyboardExtension/Info.plist
-        CURRENT_PROJECT_VERSION: 5
-        MARKETING_VERSION: 1.4.0
+        CURRENT_PROJECT_VERSION: 6
+        MARKETING_VERSION: 1.5.0
         GENERATE_INFOPLIST_FILE: NO
         ENABLE_BITCODE: NO
         SKIP_INSTALL: NO

@@ -1,42 +1,105 @@
+import UIKit
 import SwiftUI
+
+final class KeyTouchReceivingUIView: UIView {
+    var onTouchBegan: (() -> Void)?
+    var onTouchMoved: ((CGFloat) -> Void)?
+    var onTouchEnded: (() -> Void)?
+
+    private var startX: CGFloat = 0
+    private var isTrackingTouch: Bool = false
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        backgroundColor = .clear
+        isMultipleTouchEnabled = true
+        isExclusiveTouch = false
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
+        guard let touch = touches.first else { return }
+        startX = touch.location(in: self).x
+        isTrackingTouch = true
+        onTouchBegan?()
+    }
+
+    override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
+        guard isTrackingTouch, let touch = touches.first else { return }
+        let deltaX = touch.location(in: self).x - startX
+        onTouchMoved?(deltaX)
+    }
+
+    override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
+        guard isTrackingTouch else { return }
+        isTrackingTouch = false
+        onTouchEnded?()
+    }
+
+    override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
+        guard isTrackingTouch else { return }
+        isTrackingTouch = false
+        onTouchEnded?()
+    }
+}
+
+struct FastTouchOverlay: UIViewRepresentable {
+    let onTouchBegan: () -> Void
+    let onTouchMoved: (CGFloat) -> Void
+    let onTouchEnded: () -> Void
+
+    func makeUIView(context: Context) -> KeyTouchReceivingUIView {
+        let view = KeyTouchReceivingUIView()
+        view.onTouchBegan = onTouchBegan
+        view.onTouchMoved = onTouchMoved
+        view.onTouchEnded = onTouchEnded
+        return view
+    }
+
+    func updateUIView(_ uiView: KeyTouchReceivingUIView, context: Context) {
+        uiView.onTouchBegan = onTouchBegan
+        uiView.onTouchMoved = onTouchMoved
+        uiView.onTouchEnded = onTouchEnded
+    }
+}
 
 struct KeyButtonView: View {
     let key: KeyModel
     @ObservedObject var viewModel: KeyboardViewModel
+    var showBackground: Bool = true
     @ObservedObject private var settings = KeyboardSettings.shared
 
     @State private var isPressed: Bool = false
-    @State private var longPressTriggered: Bool = false
-    @State private var holdWorkItem: DispatchWorkItem? = nil
+    @State private var isLongPressActive: Bool = false
+    @State private var popupVariants: [String] = []
+    @State private var selectedPopupIndex: Int = 0
+    @State private var holdTimer: Timer? = nil
+    @State private var alreadyCommittedByRollover: Bool = false
 
     var theme: KeyboardTheme { settings.currentTheme }
     var cornerRadius: CGFloat { settings.keycapStyle.cornerRadius }
-    var isPopupOpenForThisKey: Bool { viewModel.activePopupKeyId == key.id }
     var isLiquidGlass: Bool { settings.useNativeIOSLayout || theme.useFrostedGlass }
 
     var body: some View {
         ZStack {
-            // Keycap background (iOS 26 Liquid Glass continuous squircle with subtle top specular rim)
-            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                .fill(isPressed || isPopupOpenForThisKey ? pressedBackground : keyBackground)
-                .overlay(
-                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                        .stroke(
-                            isLiquidGlass
-                                ? Color.white.opacity(theme.isDark ? 0.11 : 0.35)
-                                : Color.black.opacity(0.06),
-                            lineWidth: 0.5
-                        )
-                )
-                .shadow(
-                    color: Color.black.opacity(isLiquidGlass ? 0.18 : 0.14),
-                    radius: isLiquidGlass ? 0.5 : 0.8,
-                    x: 0,
-                    y: 1
-                )
+            if showBackground {
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .fill(isPressed || isLongPressActive ? pressedBackground : keyBackground)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                            .stroke(
+                                isLiquidGlass
+                                    ? Color.white.opacity(theme.isDark ? 0.11 : 0.35)
+                                    : Color.black.opacity(0.06),
+                                lineWidth: 0.5
+                            )
+                    )
+            }
 
-            // Secondary symbol hint in top-right corner (never shifts the centered primary letter!)
-            if let sec = key.secondaryText, settings.showSecondarySymbols, viewModel.keyboardMode == .alphabetic {
+            if showBackground, let sec = key.secondaryText, settings.showSecondarySymbols, viewModel.keyboardMode == .alphabetic {
                 VStack {
                     HStack {
                         Spacer()
@@ -50,52 +113,48 @@ struct KeyButtonView: View {
                 }
             }
 
-            // Dead-center primary key label / icon (matching iOS 26 typography)
             primaryContent
                 .foregroundColor(Color(hex: theme.textPrimaryHex))
+
+            FastTouchOverlay(
+                onTouchBegan: handleTouchBegan,
+                onTouchMoved: handleTouchMoved,
+                onTouchEnded: handleTouchEnded
+            )
         }
-        .frame(height: 43)
-        .contentShape(Rectangle())
-        .gesture(
-            DragGesture(minimumDistance: 0)
-                .onChanged { value in
-                    handleDragChanged(value)
-                }
-                .onEnded { value in
-                    handleDragEnded(value)
-                }
-        )
+        .frame(height: showBackground ? 43 : 32)
         .overlay(
             Group {
-                if settings.enableKeyPopups && isCharacterKey && (isPressed || isPopupOpenForThisKey) {
+                if settings.enableKeyPopups && isCharacterKey && (isPressed || isLongPressActive) {
                     Text(currentPreviewChar)
-                        .font(.system(size: 26, weight: .regular))
-                        .foregroundColor(Color(hex: theme.textPrimaryHex))
+                        .font(.system(size: 26, weight: .semibold))
+                        .foregroundColor(isLongPressActive ? .white : Color(hex: theme.textPrimaryHex))
                         .frame(width: 48, height: 52)
                         .background(
                             RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                .fill(isLiquidGlass ? Color(red: 0.32, green: 0.32, blue: 0.34) : Color(hex: theme.keyColorHex))
+                                .fill(
+                                    isLongPressActive
+                                        ? Color(hex: theme.accentColorHex)
+                                        : (isLiquidGlass ? Color(red: 0.32, green: 0.32, blue: 0.34) : Color(hex: theme.keyColorHex))
+                                )
                         )
                         .overlay(
                             RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                .stroke(Color.white.opacity(0.22), lineWidth: 0.8)
+                                .stroke(Color.white.opacity(0.25), lineWidth: 0.8)
                         )
-                        .shadow(color: Color.black.opacity(0.32), radius: 5, x: 0, y: 2)
                         .offset(y: -49)
                         .allowsHitTesting(false)
                 }
             },
             alignment: .top
         )
-        .zIndex(isPopupOpenForThisKey || isPressed ? 999 : 1)
+        .zIndex(isLongPressActive || isPressed ? 999 : 1)
     }
 
     private var currentPreviewChar: String {
-        if isPopupOpenForThisKey && !viewModel.activePopupVariants.isEmpty {
-            let idx = viewModel.selectedVariantIndex
-            if idx >= 0 && idx < viewModel.activePopupVariants.count {
-                return viewModel.activePopupVariants[idx]
-            }
+        if isLongPressActive && !popupVariants.isEmpty {
+            let clamped = max(0, min(popupVariants.count - 1, selectedPopupIndex))
+            return popupVariants[clamped]
         }
         return displayLabel
     }
@@ -109,63 +168,80 @@ struct KeyButtonView: View {
         }
     }
 
-    private func handleDragChanged(_ value: DragGesture.Value) {
-        if !isPressed {
-            isPressed = true
-            longPressTriggered = false
+    private func handleTouchBegan() {
+        holdTimer?.invalidate()
+        isPressed = true
+        isLongPressActive = false
+        alreadyCommittedByRollover = false
 
-            if key.type == .backspace {
-                viewModel.startContinuousBackspace()
-                return
+        if key.type == .backspace {
+            viewModel.startContinuousBackspace()
+            return
+        }
+
+        viewModel.registerTouchDown(for: key) {
+            guard !alreadyCommittedByRollover else { return }
+            alreadyCommittedByRollover = true
+            holdTimer?.invalidate()
+            holdTimer = nil
+            isPressed = false
+            if isLongPressActive && !popupVariants.isEmpty {
+                let idx = max(0, min(popupVariants.count - 1, selectedPopupIndex))
+                viewModel.selectPopupVariant(popupVariants[idx])
+                isLongPressActive = false
+            } else {
+                viewModel.handleKeyPress(key, playFeedback: false)
             }
+        }
 
-            // Fire haptic & audio click immediately on touch-down for zero-latency iOS feel!
-            viewModel.triggerTouchDownFeedback()
-
-            if isCharacterKey && (!key.alternateVariants.isEmpty || key.secondaryText != nil) {
-                let work = DispatchWorkItem {
-                    longPressTriggered = true
-                    viewModel.showLongPressPopup(for: key)
-                }
-                holdWorkItem = work
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.21, execute: work)
-            }
-        } else if longPressTriggered && isPopupOpenForThisKey {
-            let count = viewModel.activePopupVariants.count
-            if count > 1 {
-                let stepWidth: CGFloat = 28.0
-                let offsetSteps = Int(round(value.translation.width / stepWidth))
-                let clamped = max(0, min(count - 1, offsetSteps))
-                if clamped != viewModel.selectedVariantIndex {
-                    viewModel.selectedVariantIndex = clamped
-                    viewModel.triggerHaptic()
-                }
+        if isCharacterKey && (!key.alternateVariants.isEmpty || key.secondaryText != nil) {
+            holdTimer = Timer.scheduledTimer(withTimeInterval: 0.19, repeats: false) { _ in
+                guard isPressed && !alreadyCommittedByRollover else { return }
+                let variants = viewModel.variantsForKey(key)
+                popupVariants = variants
+                selectedPopupIndex = 0
+                isLongPressActive = true
+                viewModel.showLongPressPopup(for: key)
             }
         }
     }
 
-    private func handleDragEnded(_ value: DragGesture.Value) {
-        holdWorkItem?.cancel()
-        holdWorkItem = nil
+    private func handleTouchMoved(_ deltaX: CGFloat) {
+        guard isLongPressActive, popupVariants.count > 1 else { return }
+        let stepWidth: CGFloat = 26.0
+        let offsetSteps = Int(round(deltaX / stepWidth))
+        let clamped = max(0, min(popupVariants.count - 1, offsetSteps))
+        if clamped != selectedPopupIndex {
+            selectedPopupIndex = clamped
+            viewModel.updatePopupSelection(index: clamped)
+        }
+    }
+
+    private func handleTouchEnded() {
+        holdTimer?.invalidate()
+        holdTimer = nil
         isPressed = false
+        viewModel.clearRollover(for: key)
 
         if key.type == .backspace {
             viewModel.stopContinuousBackspace()
             return
         }
 
-        if longPressTriggered && isPopupOpenForThisKey {
-            if abs(value.translation.width) > 14 {
-                let idx = viewModel.selectedVariantIndex
-                if idx >= 0 && idx < viewModel.activePopupVariants.count {
-                    let chosen = viewModel.activePopupVariants[idx]
-                    viewModel.selectPopupVariant(chosen)
-                }
-            }
+        guard !alreadyCommittedByRollover else {
+            isLongPressActive = false
+            return
+        }
+        alreadyCommittedByRollover = true
+
+        if isLongPressActive && !popupVariants.isEmpty {
+            let idx = max(0, min(popupVariants.count - 1, selectedPopupIndex))
+            let chosen = popupVariants[idx]
+            isLongPressActive = false
+            viewModel.selectPopupVariant(chosen)
             return
         }
 
-        // Haptic already fired on touch-down, so pass playFeedback: false
         viewModel.handleKeyPress(key, playFeedback: false)
     }
 
@@ -183,7 +259,6 @@ struct KeyButtonView: View {
                 .font(.system(size: 18, weight: .medium))
         case .spacebar:
             if settings.useNativeIOSLayout {
-                // Exact match to IMG_1457_8c6c10.png: clean blank center with subtle "A" in bottom-right corner
                 ZStack(alignment: .bottomTrailing) {
                     Color.clear
                     Text("A")
@@ -239,7 +314,6 @@ struct KeyButtonView: View {
 
     private var keyBackground: Color {
         if isLiquidGlass {
-            // In iOS 26 Liquid Glass, character keys and functional keys share the same uniform translucent glass tint
             return Color(hex: theme.keyColorHex)
         }
         switch key.type {

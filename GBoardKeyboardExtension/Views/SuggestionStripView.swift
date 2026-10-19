@@ -2,33 +2,38 @@ import SwiftUI
 
 struct SuggestionStripView: View {
     @ObservedObject var viewModel: KeyboardViewModel
+    @ObservedObject var suggestionState: SuggestionState
     @ObservedObject private var settings = KeyboardSettings.shared
+
+    init(viewModel: KeyboardViewModel) {
+        self.viewModel = viewModel
+        self.suggestionState = viewModel.suggestionState
+    }
 
     var theme: KeyboardTheme { settings.currentTheme }
 
     var body: some View {
         ZStack {
-            if viewModel.activePopupKeyId != nil && !viewModel.activePopupVariants.isEmpty {
-                // Clickable Long-Press Character Bar
+            if suggestionState.activePopupKeyId != nil && !suggestionState.activePopupVariants.isEmpty {
                 HStack(spacing: 6) {
-                    Text("Select:")
+                    Text("Release to insert:")
                         .font(.system(size: 11, weight: .semibold))
                         .foregroundColor(Color(hex: theme.textSecondaryHex))
 
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 6) {
-                            ForEach(Array(viewModel.activePopupVariants.enumerated()), id: \.offset) { idx, variant in
+                            ForEach(Array(suggestionState.activePopupVariants.enumerated()), id: \.offset) { idx, variant in
                                 Button {
                                     viewModel.selectPopupVariant(variant)
                                 } label: {
                                     Text(variant)
                                         .font(.system(size: 16, weight: .semibold))
-                                        .foregroundColor(idx == viewModel.selectedVariantIndex ? .white : Color(hex: theme.textPrimaryHex))
+                                        .foregroundColor(idx == suggestionState.selectedVariantIndex ? .white : Color(hex: theme.textPrimaryHex))
                                         .padding(.horizontal, 11)
                                         .padding(.vertical, 4)
                                         .background(
                                             RoundedRectangle(cornerRadius: 7, style: .continuous)
-                                                .fill(idx == viewModel.selectedVariantIndex ? Color(hex: theme.accentColorHex) : Color(hex: theme.keyColorHex))
+                                                .fill(idx == suggestionState.selectedVariantIndex ? Color(hex: theme.accentColorHex) : Color(hex: theme.keyColorHex))
                                         )
                                 }
                             }
@@ -36,20 +41,11 @@ struct SuggestionStripView: View {
                     }
 
                     Spacer()
-
-                    Button {
-                        viewModel.dismissPopup()
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 16))
-                            .foregroundColor(Color(hex: theme.textSecondaryHex))
-                    }
                 }
                 .padding(.horizontal, 8)
             } else {
-                // Native iOS 26 3-Column Prediction Strip (exact match to IMG_1457_8c6c10.png)
                 HStack(spacing: 0) {
-                    if let calcResult = viewModel.calculatedMathResult {
+                    if let calcResult = suggestionState.calculatedMathResult {
                         Button {
                             viewModel.triggerTouchDownFeedback()
                             viewModel.insertText(calcResult)
@@ -68,7 +64,7 @@ struct SuggestionStripView: View {
                         .padding(.horizontal, 4)
                     }
 
-                    ForEach(Array(viewModel.suggestions.enumerated()), id: \.offset) { idx, word in
+                    ForEach(Array(suggestionState.suggestions.enumerated()), id: \.offset) { idx, word in
                         Button {
                             viewModel.applySuggestion(word)
                         } label: {
@@ -79,7 +75,7 @@ struct SuggestionStripView: View {
                                 .contentShape(Rectangle())
                         }
 
-                        if idx < viewModel.suggestions.count - 1 {
+                        if idx < suggestionState.suggestions.count - 1 {
                             Rectangle()
                                 .fill(Color.white.opacity(theme.isDark ? 0.16 : 0.25))
                                 .frame(width: 0.6, height: 20)

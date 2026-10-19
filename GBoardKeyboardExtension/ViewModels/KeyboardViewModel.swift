@@ -20,34 +20,37 @@ public enum KeyboardMode: Equatable {
     case symbols
 }
 
+public final class SuggestionState: ObservableObject {
+    @Published public var suggestions: [String] = ["I", "the", "to"]
+    @Published public var calculatedMathResult: String? = nil
+    @Published public var activePopupKeyId: String? = nil
+    @Published public var activePopupVariants: [String] = []
+    @Published public var selectedVariantIndex: Int = 0
+
+    public init() {}
+}
+
 public final class KeyboardViewModel: ObservableObject {
     @Published public var activeDrawer: ActiveDrawer = .none
     @Published public var keyboardMode: KeyboardMode = .alphabetic
     @Published public var isShifted: Bool = false
     @Published public var isCapsLock: Bool = false
     @Published public var needsInputModeSwitchKey: Bool = false
-
-    // Non-published document context so typing a character doesn't invalidate all 33 KeyButtonViews!
-    public var contextBefore: String = ""
-    public var contextAfter: String = ""
-
-    // Interactive Long-Press Popup State
-    @Published public var activePopupKeyId: String? = nil
-    @Published public var activePopupVariants: [String] = []
-    @Published public var selectedVariantIndex: Int = 0
-
-    // Predictions & Inline Calculator
-    @Published public var suggestions: [String] = ["I", "the", "to"]
-    public var currentWordPrefix: String = ""
-    @Published public var calculatedMathResult: String? = nil
     @Published public var isIncognito: Bool = false
 
-    // Gboard Translate state
     @Published public var translateInputBuffer: String = ""
     @Published public var translatedPreviewText: String = ""
     @Published public var isTranslating: Bool = false
 
-    // Callbacks to UIInputViewController
+    public let suggestionState = SuggestionState()
+
+    public var contextBefore: String = ""
+    public var contextAfter: String = ""
+    public var currentWordPrefix: String = ""
+
+    private var activeRolloverKey: KeyModel? = nil
+    private var activeRolloverCommitClosure: (() -> Void)? = nil
+
     public var onPlayClick: (() -> Void)?
     public var onInsertText: ((String) -> Void)?
     public var onDeleteBackward: (() -> Void)?
@@ -57,10 +60,9 @@ public final class KeyboardViewModel: ObservableObject {
     public var onReplaceRange: ((Int, String) -> Void)?
 
     private var lastShiftTap: Date = .distantPast
-    private let touchDownHaptic = UIImpactFeedbackGenerator(style: .rigid)
+    private let touchDownHaptic = UIImpactFeedbackGenerator(style: .light)
     private let popupHaptic = UIImpactFeedbackGenerator(style: .medium)
 
-    // Continuous Backspace Timer
     private var backspaceDelayTimer: Timer?
     private var backspaceRepeatTimer: Timer?
     private var backspaceTickCount: Int = 0
@@ -76,7 +78,7 @@ public final class KeyboardViewModel: ObservableObject {
         "hello", "help", "here", "home", "happy", "thanks", "thank", "today", "tomorrow",
         "great", "good", "going", "getting", "gboard", "keyboard", "iphone", "awesome",
         "because", "before", "better", "between", "please", "pretty", "problem", "project",
-        "world", "worlds", "world's", "work", "working", "would"
+        "world", "worlds", "world's", "work", "working", "would", "really", "right"
     ]
 
     public init() {
@@ -84,19 +86,40 @@ public final class KeyboardViewModel: ObservableObject {
         popupHaptic.prepare()
     }
 
-    // Fired on exact millisecond of touch-down for native iOS zero-latency tactile feel
+    public func registerTouchDown(for key: KeyModel, commitClosure: @escaping () -> Void) {
+        if let existingCommit = activeRolloverCommitClosure, activeRolloverKey?.id != key.id {
+            existingCommit()
+        }
+        activeRolloverKey = key
+        activeRolloverCommitClosure = commitClosure
+        triggerTouchDownFeedback()
+    }
+
+    public func clearRollover(for key: KeyModel) {
+        if activeRolloverKey?.id == key.id {
+            activeRolloverKey = nil
+            activeRolloverCommitClosure = nil
+        }
+    }
+
     public func triggerTouchDownFeedback() {
         onPlayClick?()
         if KeyboardSettings.shared.enableHapticFeedback {
-            touchDownHaptic.impactOccurred(intensity: 0.75)
+            touchDownHaptic.impactOccurred(intensity: 0.7)
             touchDownHaptic.prepare()
         }
     }
 
     public func triggerHaptic() {
         guard KeyboardSettings.shared.enableHapticFeedback else { return }
-        touchDownHaptic.impactOccurred(intensity: 0.7)
+        touchDownHaptic.impactOccurred(intensity: 0.65)
         touchDownHaptic.prepare()
+    }
+
+    public func triggerPopupHaptic() {
+        guard KeyboardSettings.shared.enableHapticFeedback else { return }
+        popupHaptic.impactOccurred(intensity: 0.85)
+        popupHaptic.prepare()
     }
 
     public func updateContext(before: String?, after: String?) {
@@ -104,15 +127,14 @@ public final class KeyboardViewModel: ObservableObject {
         self.contextBefore = newBefore
         self.contextAfter = after ?? ""
 
-        // Only run math regex if text contains arithmetic operators
         if KeyboardSettings.shared.enableInlineCalculator &&
             (newBefore.contains("+") || newBefore.contains("-") || newBefore.contains("*") || newBefore.contains("/")) {
             let newCalc = MathCalculator.shared.evaluateExpressionInText(newBefore)
-            if newCalc != self.calculatedMathResult {
-                self.calculatedMathResult = newCalc
+            if newCalc != suggestionState.calculatedMathResult {
+                suggestionState.calculatedMathResult = newCalc
             }
-        } else if self.calculatedMathResult != nil {
-            self.calculatedMathResult = nil
+        } else if suggestionState.calculatedMathResult != nil {
+            suggestionState.calculatedMathResult = nil
         }
 
         updateSuggestions(from: newBefore)
@@ -143,8 +165,8 @@ public final class KeyboardViewModel: ObservableObject {
             newSuggestions = Array(result.prefix(3))
         }
 
-        if newSuggestions != self.suggestions {
-            self.suggestions = newSuggestions
+        if newSuggestions != suggestionState.suggestions {
+            suggestionState.suggestions = newSuggestions
         }
     }
 
@@ -164,7 +186,6 @@ public final class KeyboardViewModel: ObservableObject {
         }
     }
 
-    // MARK: - Continuous Backspace Hold-to-Delete
     public func startContinuousBackspace() {
         stopContinuousBackspace()
         dismissPopup()
@@ -172,13 +193,13 @@ public final class KeyboardViewModel: ObservableObject {
         performSingleBackspace()
         backspaceTickCount = 0
 
-        backspaceDelayTimer = Timer.scheduledTimer(withTimeInterval: 0.32, repeats: false) { [weak self] _ in
+        backspaceDelayTimer = Timer.scheduledTimer(withTimeInterval: 0.30, repeats: false) { [weak self] _ in
             guard let self = self else { return }
-            self.backspaceRepeatTimer = Timer.scheduledTimer(withTimeInterval: 0.06, repeats: true) { [weak self] _ in
+            self.backspaceRepeatTimer = Timer.scheduledTimer(withTimeInterval: 0.055, repeats: true) { [weak self] _ in
                 guard let self = self else { return }
                 self.backspaceTickCount += 1
                 self.performSingleBackspace()
-                if self.backspaceTickCount > 15 {
+                if self.backspaceTickCount > 14 {
                     self.performSingleBackspace()
                 }
             }
@@ -202,9 +223,7 @@ public final class KeyboardViewModel: ObservableObject {
         }
     }
 
-    // MARK: - Interactive Key Popup Management
-    public func showLongPressPopup(for key: KeyModel) {
-        guard KeyboardSettings.shared.enableKeyPopups else { return }
+    public func variantsForKey(_ key: KeyModel) -> [String] {
         var variants = key.alternateVariants
         if variants.isEmpty {
             if let sec = key.secondaryText {
@@ -216,17 +235,25 @@ public final class KeyboardViewModel: ObservableObject {
         if isShifted || isCapsLock {
             variants = variants.map { $0.uppercased() }
         }
-        if KeyboardSettings.shared.enableHapticFeedback {
-            popupHaptic.impactOccurred()
-            popupHaptic.prepare()
+        return variants
+    }
+
+    public func showLongPressPopup(for key: KeyModel) {
+        let variants = variantsForKey(key)
+        triggerPopupHaptic()
+        suggestionState.activePopupKeyId = key.id
+        suggestionState.activePopupVariants = variants
+        suggestionState.selectedVariantIndex = 0
+    }
+
+    public func updatePopupSelection(index: Int) {
+        if suggestionState.selectedVariantIndex != index {
+            suggestionState.selectedVariantIndex = index
+            triggerHaptic()
         }
-        activePopupKeyId = key.id
-        activePopupVariants = variants
-        selectedVariantIndex = 0
     }
 
     public func selectPopupVariant(_ variant: String) {
-        triggerTouchDownFeedback()
         routeTypedCharacter(variant)
         if isShifted && !isCapsLock {
             isShifted = false
@@ -235,14 +262,13 @@ public final class KeyboardViewModel: ObservableObject {
     }
 
     public func dismissPopup() {
-        if activePopupKeyId != nil {
-            activePopupKeyId = nil
-            activePopupVariants = []
-            selectedVariantIndex = 0
+        if suggestionState.activePopupKeyId != nil {
+            suggestionState.activePopupKeyId = nil
+            suggestionState.activePopupVariants = []
+            suggestionState.selectedVariantIndex = 0
         }
     }
 
-    // MARK: - Key Press Handling (haptic already fired on touch-down!)
     public func handleKeyPress(_ key: KeyModel, playFeedback: Bool = false) {
         dismissPopup()
         if playFeedback {
