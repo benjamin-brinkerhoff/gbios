@@ -1,24 +1,19 @@
 name: Build & Release Unsigned IPA
-
 on:
   push:
     branches: [ main ]
   pull_request:
     branches: [ main ]
   workflow_dispatch:
-
 permissions:
   contents: write
-
 jobs:
   build-unsigned-ipa:
     name: Build Unsigned IPA & Release
     runs-on: macos-14
-
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
-
       - name: Select Latest Xcode
         run: |
           XCODE_PATH=$(ls -d /Applications/Xcode_16*.app 2>/dev/null | sort -V | tail -n 1)
@@ -28,13 +23,10 @@ jobs:
           echo "Using Xcode: $XCODE_PATH"
           sudo xcode-select --switch "$XCODE_PATH"
           xcodebuild -version
-
       - name: Install XcodeGen
         run: brew install xcodegen
-
       - name: Generate Xcode Project
         run: xcodegen generate
-
       - name: Build Application and Keyboard Extension (Unsigned)
         run: |
           xcodebuild \
@@ -47,7 +39,6 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
             build
-
       - name: Package Payload into Unsigned IPA
         run: |
           mkdir -p build/Payload
@@ -57,70 +48,58 @@ jobs:
             exit 1
           fi
           cp -r "$APP_PATH" build/Payload/
-
           EXT_PATH=$(find derivedData/Build/Products/Release-iphoneos -name "GBoardKeyboardExtension.appex" -type d | head -n 1)
           if [ -n "$EXT_PATH" ]; then
             mkdir -p build/Payload/GBoardApp.app/PlugIns
             rm -rf build/Payload/GBoardApp.app/PlugIns/GBoardKeyboardExtension.appex
             cp -r "$EXT_PATH" build/Payload/GBoardApp.app/PlugIns/
           fi
-
           chmod -R u+w build/Payload/GBoardApp.app
           chmod +x build/Payload/GBoardApp.app/GBoardApp
           if [ -f build/Payload/GBoardApp.app/PlugIns/GBoardKeyboardExtension.appex/GBoardKeyboardExtension ]; then
             chmod +x build/Payload/GBoardApp.app/PlugIns/GBoardKeyboardExtension.appex/GBoardKeyboardExtension
           fi
-
           plutil -replace CFBundleExecutable -string "GBoardApp" build/Payload/GBoardApp.app/Info.plist
           plutil -replace CFBundleIdentifier -string "com.gbios.app" build/Payload/GBoardApp.app/Info.plist
           plutil -replace CFBundleName -string "GBoardApp" build/Payload/GBoardApp.app/Info.plist
           plutil -replace CFBundleDisplayName -string "gbios" build/Payload/GBoardApp.app/Info.plist
-          plutil -replace CFBundleShortVersionString -string "1.5.0" build/Payload/GBoardApp.app/Info.plist
-          plutil -replace CFBundleVersion -string "6" build/Payload/GBoardApp.app/Info.plist
+          plutil -replace CFBundleShortVersionString -string "1.6.0" build/Payload/GBoardApp.app/Info.plist
+          plutil -replace CFBundleVersion -string "7" build/Payload/GBoardApp.app/Info.plist
           plutil -replace UILaunchScreen -xml "<dict/>" build/Payload/GBoardApp.app/Info.plist
-
           plutil -replace CFBundleExecutable -string "GBoardKeyboardExtension" build/Payload/GBoardApp.app/PlugIns/GBoardKeyboardExtension.appex/Info.plist
           plutil -replace CFBundleIdentifier -string "com.gbios.app.keyboard" build/Payload/GBoardApp.app/PlugIns/GBoardKeyboardExtension.appex/Info.plist
           plutil -replace CFBundleName -string "GBoardKeyboardExtension" build/Payload/GBoardApp.app/PlugIns/GBoardKeyboardExtension.appex/Info.plist
           plutil -replace CFBundleDisplayName -string "gbios" build/Payload/GBoardApp.app/PlugIns/GBoardKeyboardExtension.appex/Info.plist
-          plutil -replace CFBundleShortVersionString -string "1.5.0" build/Payload/GBoardApp.app/PlugIns/GBoardKeyboardExtension.appex/Info.plist
-          plutil -replace CFBundleVersion -string "6" build/Payload/GBoardApp.app/PlugIns/GBoardKeyboardExtension.appex/Info.plist
-
+          plutil -replace CFBundleShortVersionString -string "1.6.0" build/Payload/GBoardApp.app/PlugIns/GBoardKeyboardExtension.appex/Info.plist
+          plutil -replace CFBundleVersion -string "7" build/Payload/GBoardApp.app/PlugIns/GBoardKeyboardExtension.appex/Info.plist
           plutil -convert binary1 build/Payload/GBoardApp.app/Info.plist
           plutil -convert binary1 build/Payload/GBoardApp.app/PlugIns/GBoardKeyboardExtension.appex/Info.plist
-
           rm -rf build/Payload/GBoardApp.app/_CodeSignature
           rm -rf build/Payload/GBoardApp.app/PlugIns/GBoardKeyboardExtension.appex/_CodeSignature
           rm -f build/Payload/GBoardApp.app/embedded.mobileprovision
           rm -f build/Payload/GBoardApp.app/PlugIns/GBoardKeyboardExtension.appex/embedded.mobileprovision
-
           echo -n "APPL????" > build/Payload/GBoardApp.app/PkgInfo
-
           cd build
           zip -r -y gbios-unsigned.ipa Payload
           ls -lh gbios-unsigned.ipa
-
       - name: Upload Unsigned IPA Artifact
         uses: actions/upload-artifact@v4
         with:
           name: gbios-unsigned-ipa
           path: build/gbios-unsigned.ipa
           retention-days: 30
-
       - name: Create GitHub Release with Unsigned IPA
         if: github.event_name == 'push'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.5.${{ github.run_number }}
-          name: "gbios v1.5.${{ github.run_number }} (Unsigned IPA)"
+          tag_name: v1.6.${{ github.run_number }}
+          name: "gbios v1.6.${{ github.run_number }} (Unsigned IPA)"
           body: |
             Automated Unsigned IPA build of **gbios** (Gboard for iOS) from commit `${{ github.sha }}`.
-
-            ### What's New in v1.5:
-            - **UIKit Multi-Touch Rollover Engine (Zero Dropped Keys)**: Replaced SwiftUI's `DragGesture` with a native UIKit `UIView` touch handler (`isMultipleTouchEnabled = true`) that commits rollover keys immediately when a second thumb presses down and recovers `touchesCancelled` events, plus isolated `SuggestionState` so typing letters triggers 0 SwiftUI re-renders across the 33 keys.
-            - **Auto-Type Selected Popup Character on Release**: Pressing and holding a key now highlights the default secondary character (or any character you slide to) and automatically types it the instant you lift your finger.
-            - **1,500+ Scrollable Unicode Symbols Browser (`#+=` Page)**: Navigating to the page after Numbers (`#+=`) now opens a scrollable Unicode browser across 10 categories (Common, Math & Logic, Superscripts/Subscripts/Fractions, Arrows, Currency & Tech, Shapes & Box Drawing, Symbols & Music, Greek/Cyrillic/IPA, Enclosed/Circled, and Fancy Mathematical Alphanumeric Fonts).
-            - **Full iOS Emoji Keyboard (`IMG_1459` Match)**: Upgraded the Emoji view with the top `Search Emoji` pill bar (with live keyword search across ~1,800+ emojis), a 4-row horizontal scrolling emoji grid, and the bottom iOS category bar (`ABC`, 9 category icons with circular selection highlight, and hold-to-delete `⌫`).
+            ### What's New in v1.6:
+            - **Zero-Dead-Zone Hit Targets & Light-Tap Responsiveness**: Expanded every key's UIKit touch bounds (`point(inside:with:)`) across the `6pt` horizontal and `11pt` vertical gaps (and side margins on `a` and `l`), and disabled `delaysTouchesBegan` across parent views so light, fast taps never miss between keys.
+            - **120Hz Native UIKit `UICollectionView` Scrolling for Unicode & Emojis**: Replaced SwiftUI `ScrollView` + `Button` grids with native UIKit `UICollectionView`s (`delaysContentTouches = false`, `canCancelContentTouches = true`) so light-touch scrolling moves effortlessly without competing button gestures.
+            - **Gboard `.` Punctuation Popup Key Next to Spacebar & Return**: Added the `.` key between the spacebar and Return key in both iOS Liquid Glass and Gboard modes, complete with a floating sentence-punctuation popup (`?`, `!`, `,`, `'`, `"`, `-`, `;`, `:`, `/`, `@`, etc.) that highlights as you slide and auto-types on release.
           files: build/gbios-unsigned.ipa
           draft: false
           prerelease: false

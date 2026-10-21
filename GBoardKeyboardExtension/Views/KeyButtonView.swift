@@ -1,88 +1,144 @@
 import UIKit
 import SwiftUI
-
 final class KeyTouchReceivingUIView: UIView {
     var onTouchBegan: (() -> Void)?
     var onTouchMoved: ((CGFloat) -> Void)?
     var onTouchEnded: (() -> Void)?
-
+    var hitSlopLeft: CGFloat = 3.5
+    var hitSlopRight: CGFloat = 3.5
+    var hitSlopTop: CGFloat = 6.0
+    var hitSlopBottom: CGFloat = 6.0
+    
     private var startX: CGFloat = 0
     private var isTrackingTouch: Bool = false
-
+    
     override init(frame: CGRect) {
         super.init(frame: frame)
         backgroundColor = .clear
         isMultipleTouchEnabled = true
         isExclusiveTouch = false
     }
-
+    
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
-
+    
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
+        var parent = superview
+        while let current = parent {
+            if let scrollView = current as? UIScrollView {
+                scrollView.delaysContentTouches = false
+                scrollView.canCancelContentTouches = false
+            }
+            if let recognizers = current.gestureRecognizers {
+                for gr in recognizers {
+                    gr.delaysTouchesBegan = false
+                    gr.cancelsTouchesInView = false
+                }
+            }
+            parent = current.superview
+        }
+    }
+    
+    override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
+        let expandedBounds = CGRect(
+            x: bounds.origin.x - hitSlopLeft,
+            y: bounds.origin.y - hitSlopTop,
+            width: bounds.size.width + hitSlopLeft + hitSlopRight,
+            height: bounds.size.height + hitSlopTop + hitSlopBottom
+        )
+        return expandedBounds.contains(point)
+    }
+    
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
         guard let touch = touches.first else { return }
         startX = touch.location(in: self).x
         isTrackingTouch = true
         onTouchBegan?()
     }
-
+    
     override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
         guard isTrackingTouch, let touch = touches.first else { return }
         let deltaX = touch.location(in: self).x - startX
         onTouchMoved?(deltaX)
     }
-
+    
     override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
         guard isTrackingTouch else { return }
         isTrackingTouch = false
         onTouchEnded?()
     }
-
+    
     override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
         guard isTrackingTouch else { return }
         isTrackingTouch = false
         onTouchEnded?()
     }
 }
-
 struct FastTouchOverlay: UIViewRepresentable {
+    let hitSlopLeft: CGFloat
+    let hitSlopRight: CGFloat
+    let hitSlopTop: CGFloat
+    let hitSlopBottom: CGFloat
     let onTouchBegan: () -> Void
     let onTouchMoved: (CGFloat) -> Void
     let onTouchEnded: () -> Void
-
+    
     func makeUIView(context: Context) -> KeyTouchReceivingUIView {
         let view = KeyTouchReceivingUIView()
+        view.hitSlopLeft = hitSlopLeft
+        view.hitSlopRight = hitSlopRight
+        view.hitSlopTop = hitSlopTop
+        view.hitSlopBottom = hitSlopBottom
         view.onTouchBegan = onTouchBegan
         view.onTouchMoved = onTouchMoved
         view.onTouchEnded = onTouchEnded
         return view
     }
-
+    
     func updateUIView(_ uiView: KeyTouchReceivingUIView, context: Context) {
+        uiView.hitSlopLeft = hitSlopLeft
+        uiView.hitSlopRight = hitSlopRight
+        uiView.hitSlopTop = hitSlopTop
+        uiView.hitSlopBottom = hitSlopBottom
         uiView.onTouchBegan = onTouchBegan
         uiView.onTouchMoved = onTouchMoved
         uiView.onTouchEnded = onTouchEnded
     }
 }
-
 struct KeyButtonView: View {
     let key: KeyModel
     @ObservedObject var viewModel: KeyboardViewModel
     var showBackground: Bool = true
     @ObservedObject private var settings = KeyboardSettings.shared
-
+    
     @State private var isPressed: Bool = false
     @State private var isLongPressActive: Bool = false
     @State private var popupVariants: [String] = []
     @State private var selectedPopupIndex: Int = 0
     @State private var holdTimer: Timer? = nil
     @State private var alreadyCommittedByRollover: Bool = false
-
+    
     var theme: KeyboardTheme { settings.currentTheme }
     var cornerRadius: CGFloat { settings.keycapStyle.cornerRadius }
     var isLiquidGlass: Bool { settings.useNativeIOSLayout || theme.useFrostedGlass }
-
+    var isPeriodKey: Bool { key.primaryText == "." && key.id.contains("period") }
+    
+    private var leftHitSlop: CGFloat {
+        if key.primaryText == "a" { return 22.0 }
+        if key.primaryText == "z" { return 8.0 }
+        if key.primaryText == "q" { return 7.0 }
+        return 3.5
+    }
+    
+    private var rightHitSlop: CGFloat {
+        if key.primaryText == "l" { return 22.0 }
+        if key.primaryText == "m" { return 8.0 }
+        if key.primaryText == "p" { return 7.0 }
+        return 3.5
+    }
+    
     var body: some View {
         ZStack {
             if showBackground {
@@ -98,7 +154,7 @@ struct KeyButtonView: View {
                             )
                     )
             }
-
+            
             if showBackground, let sec = key.secondaryText, settings.showSecondarySymbols, viewModel.keyboardMode == .alphabetic {
                 VStack {
                     HStack {
@@ -112,11 +168,15 @@ struct KeyButtonView: View {
                     Spacer()
                 }
             }
-
+            
             primaryContent
                 .foregroundColor(Color(hex: theme.textPrimaryHex))
-
+            
             FastTouchOverlay(
+                hitSlopLeft: leftHitSlop,
+                hitSlopRight: rightHitSlop,
+                hitSlopTop: 6.0,
+                hitSlopBottom: 6.0,
                 onTouchBegan: handleTouchBegan,
                 onTouchMoved: handleTouchMoved,
                 onTouchEnded: handleTouchEnded
@@ -126,31 +186,59 @@ struct KeyButtonView: View {
         .overlay(
             Group {
                 if settings.enableKeyPopups && isCharacterKey && (isPressed || isLongPressActive) {
-                    Text(currentPreviewChar)
-                        .font(.system(size: 26, weight: .semibold))
-                        .foregroundColor(isLongPressActive ? .white : Color(hex: theme.textPrimaryHex))
-                        .frame(width: 48, height: 52)
+                    if isPeriodKey && isLongPressActive && !popupVariants.isEmpty {
+                        HStack(spacing: 4) {
+                            ForEach(Array(popupVariants.prefix(8).enumerated()), id: \.offset) { idx, symbol in
+                                let isSelected = (idx == selectedPopupIndex)
+                                Text(symbol)
+                                    .font(.system(size: 20, weight: .semibold))
+                                    .foregroundColor(isSelected ? .white : Color(hex: theme.textPrimaryHex))
+                                    .frame(width: 30, height: 38)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                            .fill(isSelected ? Color(hex: theme.accentColorHex) : (isLiquidGlass ? Color(red: 0.28, green: 0.28, blue: 0.30) : Color(hex: theme.keyColorHex)))
+                                    )
+                            }
+                        }
+                        .padding(5)
                         .background(
-                            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                .fill(
-                                    isLongPressActive
-                                        ? Color(hex: theme.accentColorHex)
-                                        : (isLiquidGlass ? Color(red: 0.32, green: 0.32, blue: 0.34) : Color(hex: theme.keyColorHex))
-                                )
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .fill(isLiquidGlass ? Color(red: 0.20, green: 0.20, blue: 0.22).opacity(0.96) : Color(hex: theme.functionalKeyColorHex))
                         )
                         .overlay(
-                            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                .stroke(Color.white.opacity(0.25), lineWidth: 0.8)
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .stroke(Color.white.opacity(0.22), lineWidth: 0.8)
                         )
-                        .offset(y: -49)
+                        .shadow(color: Color.black.opacity(0.35), radius: 6, x: 0, y: 3)
+                        .offset(x: -95, y: -54)
                         .allowsHitTesting(false)
+                    } else {
+                        Text(currentPreviewChar)
+                            .font(.system(size: 26, weight: .semibold))
+                            .foregroundColor(isLongPressActive ? .white : Color(hex: theme.textPrimaryHex))
+                            .frame(width: 48, height: 52)
+                            .background(
+                                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                    .fill(
+                                        isLongPressActive
+                                            ? Color(hex: theme.accentColorHex)
+                                            : (isLiquidGlass ? Color(red: 0.32, green: 0.32, blue: 0.34) : Color(hex: theme.keyColorHex))
+                                    )
+                            )
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                    .stroke(Color.white.opacity(0.25), lineWidth: 0.8)
+                            )
+                            .offset(y: -49)
+                            .allowsHitTesting(false)
+                    }
                 }
             },
             alignment: .top
         )
         .zIndex(isLongPressActive || isPressed ? 999 : 1)
     }
-
+    
     private var currentPreviewChar: String {
         if isLongPressActive && !popupVariants.isEmpty {
             let clamped = max(0, min(popupVariants.count - 1, selectedPopupIndex))
@@ -158,7 +246,7 @@ struct KeyButtonView: View {
         }
         return displayLabel
     }
-
+    
     private var isCharacterKey: Bool {
         switch key.type {
         case .character, .secondaryCharacter:
@@ -167,18 +255,18 @@ struct KeyButtonView: View {
             return false
         }
     }
-
+    
     private func handleTouchBegan() {
         holdTimer?.invalidate()
         isPressed = true
         isLongPressActive = false
         alreadyCommittedByRollover = false
-
+        
         if key.type == .backspace {
             viewModel.startContinuousBackspace()
             return
         }
-
+        
         viewModel.registerTouchDown(for: key) {
             guard !alreadyCommittedByRollover else { return }
             alreadyCommittedByRollover = true
@@ -193,9 +281,9 @@ struct KeyButtonView: View {
                 viewModel.handleKeyPress(key, playFeedback: false)
             }
         }
-
+        
         if isCharacterKey && (!key.alternateVariants.isEmpty || key.secondaryText != nil) {
-            holdTimer = Timer.scheduledTimer(withTimeInterval: 0.19, repeats: false) { _ in
+            holdTimer = Timer.scheduledTimer(withTimeInterval: 0.18, repeats: false) { _ in
                 guard isPressed && !alreadyCommittedByRollover else { return }
                 let variants = viewModel.variantsForKey(key)
                 popupVariants = variants
@@ -205,35 +293,36 @@ struct KeyButtonView: View {
             }
         }
     }
-
+    
     private func handleTouchMoved(_ deltaX: CGFloat) {
         guard isLongPressActive, popupVariants.count > 1 else { return }
-        let stepWidth: CGFloat = 26.0
-        let offsetSteps = Int(round(deltaX / stepWidth))
-        let clamped = max(0, min(popupVariants.count - 1, offsetSteps))
+        let stepWidth: CGFloat = 24.0
+        let offsetSteps = Int(round(abs(deltaX) / stepWidth))
+        let maxIdx = isPeriodKey ? min(popupVariants.count - 1, 7) : (popupVariants.count - 1)
+        let clamped = max(0, min(maxIdx, offsetSteps))
         if clamped != selectedPopupIndex {
             selectedPopupIndex = clamped
             viewModel.updatePopupSelection(index: clamped)
         }
     }
-
+    
     private func handleTouchEnded() {
         holdTimer?.invalidate()
         holdTimer = nil
         isPressed = false
         viewModel.clearRollover(for: key)
-
+        
         if key.type == .backspace {
             viewModel.stopContinuousBackspace()
             return
         }
-
+        
         guard !alreadyCommittedByRollover else {
             isLongPressActive = false
             return
         }
         alreadyCommittedByRollover = true
-
+        
         if isLongPressActive && !popupVariants.isEmpty {
             let idx = max(0, min(popupVariants.count - 1, selectedPopupIndex))
             let chosen = popupVariants[idx]
@@ -241,10 +330,10 @@ struct KeyButtonView: View {
             viewModel.selectPopupVariant(chosen)
             return
         }
-
+        
         viewModel.handleKeyPress(key, playFeedback: false)
     }
-
+    
     @ViewBuilder
     private var primaryContent: some View {
         switch key.type {
@@ -297,21 +386,21 @@ struct KeyButtonView: View {
                 .offset(y: (viewModel.keyboardMode == .alphabetic && !viewModel.isShifted && !viewModel.isCapsLock) ? -1.0 : 0)
         }
     }
-
+    
     private var displayLabel: String {
         if viewModel.keyboardMode == .alphabetic {
             return (viewModel.isShifted || viewModel.isCapsLock) ? key.primaryText.uppercased() : key.primaryText
         }
         return key.primaryText
     }
-
+    
     private var pressedBackground: Color {
         if isLiquidGlass {
             return Color.white.opacity(theme.isDark ? 0.34 : 0.95)
         }
         return Color(hex: theme.accentColorHex).opacity(0.35)
     }
-
+    
     private var keyBackground: Color {
         if isLiquidGlass {
             return Color(hex: theme.keyColorHex)
